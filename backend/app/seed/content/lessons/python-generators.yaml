@@ -1,0 +1,206 @@
+slug: python-generators
+title: Generators and lazy pipelines
+summary: Process huge files and streams with constant memory using generators, yield and generator pipelines.
+minutes: 20
+level: beginner
+tier: free
+tags: [python, iteration, performance]
+prerequisites: []
+sections:
+  explanation: |
+    A **generator function** contains `yield`. Calling it does not run the body - it returns a *generator object*.
+    Each `next()` runs the body until the next `yield`, hands back that value, and **pauses** with all local
+    variables intact. When the function returns, iteration stops (`StopIteration`).
+
+    Generators are **lazy**: values are produced one at a time, on demand. A pipeline of generators processes a
+    10 GB log file with the same memory as a 10-line one.
+
+    *Generator expressions* are the lazy cousin of list comprehensions: `(x * 2 for x in data)` instead of `[x * 2 for x in data]`.
+  why_it_matters: |
+    Real systems read large files, paginate APIs, stream database rows and stream LLM tokens. Loading everything into a list
+    is the most common cause of memory blow-ups in data scripts. Generators also make pipelines composable and testable.
+  prerequisites:
+    - for loops and functions
+    - List comprehensions
+  mental_model: |
+    A list is a **printed book**: every page exists up front. A generator is a **storyteller**: they only say the next
+    sentence when you ask, and remember where they stopped. A pipeline of generators is a line of storytellers, each
+    listening to the previous one and passing on a transformed sentence.
+  architecture:
+    caption: A lazy pipeline pulls one item at a time from the end.
+    mermaid: |
+      flowchart LR
+        F[read_lines] --> P[parse] --> E[only_errors] --> T[take 3] --> C[consumer]
+        C -. next() .-> T -. next() .-> E -. next() .-> P -. next() .-> F
+  code_examples:
+    - title: How yield pauses a function
+      language: python
+      runnable: true
+      code: |
+        def countdown(n):
+            print("starting")
+            while n > 0:
+                yield n          # pause here, hand n to the caller
+                n -= 1
+            print("done")
+
+        gen = countdown(3)       # nothing printed yet - the body hasn't started
+        print(next(gen))
+        print(next(gen))
+        print(list(gen))         # drains the rest
+      annotations:
+        - "Calling countdown(3) only creates the generator; 'starting' prints on the first next()."
+        - "list(gen) continues from where it paused."
+      expected_output: |
+        starting
+        3
+        2
+        done
+        [1]
+    - title: A lazy log-processing pipeline
+      language: python
+      runnable: true
+      code: |
+        LOG = """\
+        2026-03-01 INFO  api  GET /health 200
+        2026-03-01 ERROR api  POST /orders 500
+        2026-03-01 INFO  web  GET / 200
+        2026-03-01 ERROR db   connection reset
+        2026-03-01 ERROR api  POST /orders 500
+        2026-03-01 WARN  api  slow query 1200ms"""
+
+        def read_lines(text):
+            for line in text.splitlines():   # in real code: `for line in open(path)`
+                yield line
+
+        def parse(lines):
+            for line in lines:
+                date, level, service, message = line.split(maxsplit=3)
+                yield {"level": level, "service": service, "message": message}
+
+        def only(level, records):
+            return (r for r in records if r["level"] == level)
+
+        errors = only("ERROR", parse(read_lines(LOG)))
+        for record in errors:
+            print(record["service"], "|", record["message"])
+      annotations:
+        - "Each stage is independently testable and handles one record at a time."
+        - "Replace read_lines with a file handle and memory stays constant for any file size."
+      expected_output: |
+        api | POST /orders 500
+        db | connection reset
+        api | POST /orders 500
+    - title: Memory - list vs generator
+      language: python
+      runnable: true
+      code: |
+        import sys
+
+        as_list = [n * n for n in range(1_000_000)]
+        as_gen = (n * n for n in range(1_000_000))
+
+        print("list bytes >", 1_000_000, ":", sys.getsizeof(as_list) > 1_000_000)
+        print("generator bytes < 500:", sys.getsizeof(as_gen) < 500)
+        print("same sum:", sum(as_list) == sum(as_gen))
+      annotations:
+        - "The generator object is tiny no matter how many items it will produce."
+        - "A generator can be consumed only once - after sum(), it is exhausted."
+      expected_output: |
+        list bytes > 1000000 : True
+        generator bytes < 500: True
+        same sum: True
+  real_world: |
+    - **Pagination:** `def all_issues(): while url: page = get(url); yield from page.items; url = page.next` hides paging from callers.
+    - **ETL:** read → parse → validate → batch → write, each as a generator, keeps memory flat.
+    - **LLM streaming:** SDKs expose streamed tokens as iterators/generators you consume with a for loop.
+    - **FastAPI:** `StreamingResponse` accepts a generator to stream large downloads or server-sent events.
+  common_mistakes:
+    - mistake: Iterating a generator twice and getting nothing the second time.
+      fix: Generators are single-use. Recreate them, or materialise with list() if you really need multiple passes.
+    - mistake: Calling len() on a generator.
+      fix: Generators don't know their length; count while iterating or keep a list if size is small.
+    - mistake: Leaving files open in a half-consumed generator.
+      fix: Use `with open(...)` inside the generator; close the generator (or exhaust it) so cleanup runs.
+  debugging: |
+    Wrap a stage to watch items flow: `def tap(items, label): for x in items: print(label, x); yield x`.
+    Use `itertools.islice(gen, 5)` to peek at the first few items without consuming everything.
+    If nothing happens at all, remember generators do no work until something iterates them.
+  performance_security: |
+    - Generators trade speed per item for memory; for small data, lists are fine and sometimes faster.
+    - Lazy pipelines let you stop early (`next(...)`, `islice`) - a big win when searching large inputs.
+    - When reading untrusted input, enforce limits (max lines, max line length) inside the generator to avoid resource exhaustion.
+  interview_questions:
+    - q: What's the difference between a list comprehension and a generator expression?
+      a: A list comprehension builds the whole list in memory immediately; a generator expression produces items lazily, one at a time, with O(1) memory, and can be iterated only once.
+    - q: What does `yield from` do?
+      a: It delegates to a sub-iterator, yielding each of its values (and forwarding send/throw), which simplifies composing generators.
+    - q: When would you not use a generator?
+      a: When you need random access, multiple passes, len(), or when data is small enough that simplicity matters more than memory.
+  mini_challenge:
+    title: Batch a stream
+    prompt: Write `batched(items, size)` that groups any iterable into lists of `size` items. Complete the linked exercise.
+    exercise: python-batched
+  advanced_challenge:
+    title: Paginated API iterator
+    prompt: Write a generator that walks a fake paginated API (a dict of pages with `next` cursors), retries a page once on a simulated error, and stops after `max_items`. Test it with a page that fails once.
+  further_reading:
+    - {title: "Python docs: Generators (Functional Programming HOWTO)", url: "https://docs.python.org/3/howto/functional.html#generators"}
+    - {title: "PEP 255: Simple Generators", url: "https://peps.python.org/pep-0255/"}
+    - {title: "Python docs: itertools", url: "https://docs.python.org/3/library/itertools.html"}
+  version_notes: Python 3.12 adds `itertools.batched`; the exercise asks you to build it yourself.
+quiz:
+  - prompt: What happens when you call a generator function?
+    options: [The body runs to completion, The body runs until the first yield, A generator object is returned and nothing runs yet, It raises StopIteration]
+    answer: 2
+    explanation: The body starts only on the first next() call.
+  - prompt: You call sum(gen) twice on the same generator. The second result is...
+    options: [The same sum, 0 because the generator is exhausted, An error, Double the sum]
+    answer: 1
+    explanation: Generators are single-use; the second sum iterates an empty generator.
+exercises:
+  - slug: python-batched
+    title: Batch an iterable
+    kind: code
+    category: coding
+    difficulty: beginner
+    language: python
+    points: 10
+    prompt_md: |
+      Implement `batched(items, size)` returning a **list of lists** (so it can be tested), built from a generator
+      internally if you like. The last batch may be shorter. Raise `ValueError` if `size < 1`.
+
+      Example: `batched([1, 2, 3, 4, 5], 2)` → `[[1, 2], [3, 4], [5]]`
+    starter_code: |
+      def batched(items, size):
+          # your code here
+          return []
+    tests:
+      function: batched
+      cases:
+        - {args: [[1, 2, 3, 4, 5], 2], expected: [[1, 2], [3, 4], [5]]}
+        - {args: [[], 3], expected: []}
+        - {args: [[1, 2, 3], 3], expected: [[1, 2, 3]]}
+        - {args: [["a", "b", "c", "d"], 1], expected: [["a"], ["b"], ["c"], ["d"]], hidden: true}
+        - {args: [[1, 2], 10], expected: [[1, 2]], hidden: true}
+    hints:
+      - Keep a current batch list; append items and emit when it reaches `size`.
+      - Don't forget to emit the final partial batch.
+    solution: |
+      def _batches(items, size):
+          if size < 1:
+              raise ValueError("size must be >= 1")
+          batch = []
+          for item in items:
+              batch.append(item)
+              if len(batch) == size:
+                  yield batch
+                  batch = []
+          if batch:
+              yield batch
+
+      def batched(items, size):
+          return list(_batches(items, size))
+    explanation_md: |
+      The generator `_batches` works on any iterable - including infinite streams - with memory proportional to `size`.
+      `batched` wraps it in `list()` only so the tests can compare values.

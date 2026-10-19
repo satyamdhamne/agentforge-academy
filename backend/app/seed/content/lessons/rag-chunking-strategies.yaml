@@ -1,0 +1,241 @@
+slug: rag-chunking-strategies
+title: Chunking strategies that work
+summary: Choose chunk size, overlap and boundaries deliberately - and measure the effect on retrieval instead of guessing.
+minutes: 30
+level: intermediate
+tier: free
+tags: [rag, chunking, retrieval]
+prerequisites: [embeddings-similarity]
+sections:
+  explanation: |
+    Retrieval works on **chunks**, not whole documents: you embed and index pieces small enough to be specific, yet
+    large enough to contain a complete answer. The main levers:
+
+    - **Size** (tokens/words per chunk): small chunks are precise but can cut answers in half; large chunks carry more
+      context but dilute the embedding and cost more tokens when inserted into the prompt.
+    - **Overlap**: repeating the last N words of a chunk at the start of the next reduces the chance that an answer is
+      split across a boundary.
+    - **Boundaries**: split on structure (headings, paragraphs, sentences, code blocks) rather than raw character counts.
+    - **Metadata**: keep document id, title, section heading, page number, permissions and timestamps with each chunk for
+      filtering and citations.
+
+    There is no universally best setting - pick candidates and **evaluate recall** on real questions.
+  why_it_matters: |
+    Most "the RAG bot gave a wrong answer" incidents are retrieval failures, and most retrieval failures start with
+    chunking: the answer was split across chunks, buried in a huge chunk, or separated from the heading that gave it meaning.
+  prerequisites:
+    - Embeddings and similarity search
+    - Python string handling
+  mental_model: |
+    Chunking is like cutting a long book into **index cards** for a study group. Cards that are too small contain half a
+    thought; cards that are too large contain five topics and match everything weakly. Writing the chapter title on each
+    card (metadata) and repeating the last sentence of the previous card (overlap) keeps each card understandable on its own.
+  architecture:
+    caption: Structure-aware chunking pipeline.
+    mermaid: |
+      flowchart LR
+        D[Document] --> P[Parse: headings, paragraphs, tables, code]
+        P --> S[Split into sentences]
+        S --> K[Pack sentences up to N words]
+        K --> O[Add overlap from previous chunk]
+        O --> M[Attach metadata: doc, section, page, ACL]
+        M --> E[Embed + index]
+  code_examples:
+    - title: Fixed-size word windows with overlap
+      language: python
+      runnable: true
+      code: |
+        def window_chunks(words, size, overlap):
+            if overlap >= size:
+                raise ValueError("overlap must be smaller than size")
+            step = size - overlap
+            return [words[i:i + size] for i in range(0, max(len(words) - overlap, 1), step)]
+
+        words = "a b c d e f g h i j".split()
+        for chunk in window_chunks(words, size=4, overlap=1):
+            print(" ".join(chunk))
+      annotations:
+        - "Each chunk starts with the last word of the previous one (overlap=1)."
+        - "Simple and predictable, but ignores sentences and headings."
+      expected_output: |
+        a b c d
+        d e f g
+        g h i j
+    - title: Section- and sentence-aware chunking with metadata
+      language: python
+      runnable: true
+      code: |
+        import re
+
+        DOC = """# Leave policy
+        ## Paid time off
+        Employees accrue 20 days per year. Up to 5 days carry over. Carried days expire on March 31.
+        ## Sick leave
+        Sick leave is separate from PTO. A certificate is required after 3 days."""
+
+        def chunk(doc, max_words=12):
+            chunks, section, current = [], None, []
+
+            def flush():
+                if current:
+                    chunks.append({"section": section, "text": " ".join(current)})
+
+            for line in doc.splitlines():
+                line = line.strip()
+                heading = re.match(r"^#+\s+(.*)", line)
+                if heading:
+                    flush(); current = []
+                    section = heading.group(1)
+                    continue
+                for sentence in re.split(r"(?<=[.!?])\s+", line):
+                    if current and len(" ".join(current + [sentence]).split()) > max_words:
+                        flush(); current = []
+                    current.append(sentence)
+            flush()
+            return chunks
+
+        for c in chunk(DOC):
+            print(f"[{c['section']}] {c['text']}")
+      annotations:
+        - "Chunks never cross a heading, and sentences are never cut in half."
+        - "The section name travels with the chunk - useful for citations and for embedding ('Paid time off: ...')."
+      expected_output: |
+        [Paid time off] Employees accrue 20 days per year. Up to 5 days carry over.
+        [Paid time off] Carried days expire on March 31.
+        [Sick leave] Sick leave is separate from PTO.
+        [Sick leave] A certificate is required after 3 days.
+    - title: Measure recall@1 for three chunk sizes
+      language: python
+      runnable: true
+      code: |
+        import re
+        from collections import Counter
+        import math
+
+        TEXT = ("Refunds are processed within 5 business days. Refunds go to the original card. "
+                "Annual plans can be refunded within 30 days of purchase. Monthly plans are not refundable. "
+                "Invoices are emailed on the first of each month. Invoices can be downloaded from billing settings.")
+        QUESTIONS = {"how long do refunds take": "5 business days",
+                     "can annual plans be refunded": "30 days of purchase",
+                     "where can I download invoices": "billing settings"}
+
+        def chunks(size):
+            words = TEXT.split()
+            return [" ".join(words[i:i + size]) for i in range(0, len(words), size)]
+
+        def vec(t):
+            return Counter(re.findall(r"[a-z]+", t.lower()))
+
+        def cos(a, b):
+            dot = sum(a[k] * b[k] for k in a)
+            return dot / ((math.sqrt(sum(v*v for v in a.values())) * math.sqrt(sum(v*v for v in b.values()))) or 1)
+
+        def recall_at_1(size):
+            cs = chunks(size)
+            hits = 0
+            for q, answer in QUESTIONS.items():
+                best = max(cs, key=lambda c: cos(vec(q), vec(c)))
+                hits += answer in best
+            return hits / len(QUESTIONS)
+
+        for size in (6, 12, 40):
+            print(f"chunk size {size:>2} words: recall@1 = {recall_at_1(size):.2f}")
+      annotations:
+        - "6-word chunks cut every answer in half; 40-word chunks blur two topics together, so one question retrieves the wrong passage."
+        - "The middle setting wins here - on your data it may not. Measure, don't guess."
+        - "Real evaluations use dozens to hundreds of labelled questions."
+      expected_output: |
+        chunk size  6 words: recall@1 = 0.00
+        chunk size 12 words: recall@1 = 1.00
+        chunk size 40 words: recall@1 = 0.67
+  real_world: |
+    - **Policy/HR docs:** heading-aware chunks with the section path ("Leave › Sick leave") prepended before embedding.
+    - **Code search:** chunk by function/class using a parser rather than line counts.
+    - **PDFs:** extract tables separately and keep page numbers for citations; scanned PDFs need OCR first.
+    - **Incremental indexing:** store a content hash per chunk so only changed chunks are re-embedded.
+  common_mistakes:
+    - mistake: Picking chunk size from a blog post.
+      fix: Evaluate recall@k on your own documents and questions for a few candidate settings.
+    - mistake: Throwing away headings.
+      fix: Keep the section path as metadata and include it in the embedded text.
+    - mistake: Overlap so large that results are full of near-duplicates.
+      fix: Keep overlap modest (often 10-20% of chunk size) and de-duplicate retrieved chunks.
+  debugging: |
+    - For a failing question, find the chunk that *should* have matched: does it exist intact, or was the answer split?
+    - Print chunk length distributions: very short chunks (e.g. lone headings) often pollute results.
+    - Compare retrieval with and without the section title in the embedded text.
+  performance_security: |
+    - Smaller chunks mean more vectors: more storage, larger indexes and more embedding cost - but cheaper prompts.
+    - Attach permissions (ACL groups, tenant id) to **every chunk** at ingestion, so filtering happens in the vector query.
+    - Sanitise extracted text: hidden text in PDFs/HTML can carry prompt-injection payloads into your index.
+  interview_questions:
+    - q: How do you choose a chunk size for a RAG system?
+      a: Start from the structure of the documents, generate a labelled set of question→passage pairs, and compare recall@k and answer quality across a few chunk sizes/overlaps, considering token cost per retrieved chunk.
+    - q: Why is chunk overlap useful, and what's the downside?
+      a: It reduces the chance that an answer spans a boundary; the cost is more chunks, more storage and duplicate results.
+    - q: What metadata would you store with each chunk?
+      a: Document id/version, title, section path, page, timestamps, source URL, language, tenant id and access-control groups.
+  mini_challenge:
+    title: Overlapping chunks
+    prompt: Implement word-window chunking with overlap in the linked exercise, including validation.
+    exercise: chunk-with-overlap
+  advanced_challenge:
+    title: Chunking experiment report
+    prompt: Using the RAG Engineering Lab's seeded corpus, write 20 questions with known answer passages, compare three chunking strategies on recall@3 and average prompt tokens, and recommend one with evidence.
+  further_reading:
+    - {title: "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks", url: "https://arxiv.org/abs/2005.11401"}
+    - {title: "Pinecone: Chunking strategies for LLM applications", url: "https://www.pinecone.io/learn/chunking-strategies/"}
+  version_notes: Examples use word counts as a proxy for tokens. In production, size chunks in tokens using your embedding model's tokenizer.
+quiz:
+  - prompt: Your bot answers "Carried days expire on March 31" but loses which policy it belongs to. What's the best fix?
+    options: [Bigger model, Attach and embed the section heading with each chunk, Lower temperature, More overlap only]
+    answer: 1
+    explanation: The heading carries the context the sentence lacks; keep it as metadata and in the embedded text.
+  - prompt: What is recall@k in retrieval evaluation?
+    options: [Fraction of questions where a correct passage is in the top k results, The model's accuracy, Latency of the k-th query, Number of chunks per document]
+    answer: 0
+    explanation: Recall@k measures whether the right passage was retrieved at all within the top k.
+exercises:
+  - slug: chunk-with-overlap
+    title: Word chunks with overlap
+    kind: code
+    category: rag
+    difficulty: beginner
+    language: python
+    points: 10
+    prompt_md: |
+      Implement `chunk_words(text, size, overlap)` returning a list of strings.
+
+      - Split `text` on whitespace into words.
+      - Each chunk has at most `size` words; consecutive chunks share `overlap` words.
+      - Stop when the last chunk reaches the final word (don't emit a chunk made only of overlap).
+      - Raise `ValueError` if `size < 1` or `overlap < 0` or `overlap >= size`. Empty text returns `[]`.
+    starter_code: |
+      def chunk_words(text, size, overlap):
+          # your code here
+          return []
+    tests:
+      function: chunk_words
+      cases:
+        - {args: ["a b c d e f g h i j", 4, 1], expected: ["a b c d", "d e f g", "g h i j"]}
+        - {args: ["a b c", 5, 2], expected: ["a b c"]}
+        - {args: ["", 3, 1], expected: []}
+        - {args: ["a b c d e", 2, 0], expected: ["a b", "c d", "e"], hidden: true}
+        - {args: ["one two three four five six", 3, 2], expected: ["one two three", "two three four", "three four five", "four five six"], hidden: true}
+    hints:
+      - The step between chunk starts is size - overlap.
+      - Stop once a chunk's end index reaches len(words).
+    solution: |
+      def chunk_words(text, size, overlap):
+          if size < 1 or overlap < 0 or overlap >= size:
+              raise ValueError("invalid size/overlap")
+          words = text.split()
+          chunks, start = [], 0
+          while start < len(words):
+              chunks.append(" ".join(words[start:start + size]))
+              if start + size >= len(words):
+                  break
+              start += size - overlap
+          return chunks
+    explanation_md: |
+      Breaking when the current window reaches the end avoids a trailing chunk that only repeats overlap words.

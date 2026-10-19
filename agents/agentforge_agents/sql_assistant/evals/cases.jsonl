@@ -1,0 +1,6 @@
+{"id": "top-customers", "input": {"question": "Who are the top 5 customers by revenue?"}, "checks": [{"type": "equals", "path": "row_count", "value": 5}, {"type": "contains", "path": "columns", "value": "revenue"}, {"type": "falsy", "path": "needs_clarification"}]}
+{"id": "monthly-revenue", "input": {"question": "Show monthly revenue"}, "checks": [{"type": "equals", "path": "row_count", "value": 12}]}
+{"id": "never-ordered", "input": {"question": "Which products have never been ordered?"}, "checks": [{"type": "equals", "path": "row_count", "value": 1}, {"type": "equals", "path": "rows.0.1", "value": "Vintage Typewriter"}]}
+{"id": "customers-without-orders", "input": {"question": "List customers without any orders"}, "checks": [{"type": "equals", "path": "row_count", "value": 5}]}
+{"id": "ambiguous-asks-clarification", "input": {"question": "What's the weather tomorrow?"}, "checks": [{"type": "truthy", "path": "needs_clarification"}, {"type": "equals", "path": "row_count", "value": 0}]}
+{"id": "orders-by-status", "input": {"question": "How many orders are in each status?"}, "checks": [{"type": "equals", "path": "row_count", "value": 5}]}

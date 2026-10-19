@@ -1,0 +1,219 @@
+slug: http-request-lifecycle
+title: The life of an HTTP request
+summary: Follow one API call from your code through DNS, TCP, TLS, HTTP and back - and learn where things go wrong.
+minutes: 20
+level: beginner
+tier: free
+tags: [http, networking, debugging]
+prerequisites: []
+sections:
+  explanation: |
+    When your code calls `GET https://api.example.com/users/42`, several layers cooperate:
+
+    1. **DNS** turns `api.example.com` into an IP address.
+    2. **TCP** opens a reliable connection to that IP on port 443.
+    3. **TLS** encrypts the connection and proves the server really is `api.example.com`.
+    4. **HTTP** sends a *request* (method, path, headers, optional body) and receives a *response* (status code, headers, body).
+
+    HTTP itself is just structured text (HTTP/1.1) or framed binary (HTTP/2 and HTTP/3) with the same meaning.
+    A request line looks like `GET /users/42 HTTP/1.1`, followed by headers such as `Host` and `Accept`,
+    a blank line, and an optional body. The response starts with a status line like `HTTP/1.1 200 OK`.
+  why_it_matters: |
+    Every API, web app, LLM provider and cloud service you will use speaks HTTP. When something breaks - a timeout,
+    a 401, a CORS error, a slow page - knowing which layer is responsible turns hours of guessing into minutes of
+    targeted debugging.
+  prerequisites:
+    - Comfortable running a small Python script
+    - Know what a URL is
+  mental_model: |
+    Think of sending a letter through a building's mailroom:
+
+    - **DNS** is the directory that maps a company name to a street address.
+    - **TCP** is the courier who guarantees delivery and order of every page.
+    - **TLS** is the sealed, tamper-evident envelope with a verified return address.
+    - **HTTP** is the letter itself: a subject line (method + path), a cover sheet (headers) and the content (body).
+
+    If the letter never arrives, check the directory and courier. If it arrives but is rejected, read the letter.
+  architecture:
+    caption: One HTTPS request, layer by layer.
+    mermaid: |
+      sequenceDiagram
+        participant C as Client code
+        participant D as DNS resolver
+        participant S as api.example.com
+        C->>D: Where is api.example.com?
+        D-->>C: 203.0.113.10
+        C->>S: TCP handshake (SYN, SYN-ACK, ACK)
+        C->>S: TLS handshake (certificate, keys)
+        C->>S: GET /users/42 + headers
+        S-->>C: 200 OK + JSON body
+  code_examples:
+    - title: Parse a raw HTTP request
+      language: python
+      runnable: true
+      code: |
+        raw = (
+            "POST /api/v1/orders?dry_run=true HTTP/1.1\r\n"
+            "Host: shop.example.com\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: 27\r\n"
+            "\r\n"
+            '{"sku": "A-100", "qty": 2}'
+        )
+
+        head, body = raw.split("\r\n\r\n", 1)          # headers end at the first blank line
+        request_line, *header_lines = head.split("\r\n")
+        method, target, version = request_line.split(" ")
+        path, _, query = target.partition("?")
+        headers = {}
+        for line in header_lines:
+            name, value = line.split(":", 1)
+            headers[name.strip().lower()] = value.strip()  # header names are case-insensitive
+
+        print(method, path, version)
+        print("query:", query)
+        print("host:", headers["host"])
+        print("body bytes:", len(body.encode()), "declared:", headers["content-length"])
+      annotations:
+        - "The blank line (\\r\\n\\r\\n) separates headers from the body."
+        - "Header names are case-insensitive, so we normalise them to lower case."
+        - "Content-Length counts bytes, not characters - always compare encoded length."
+      expected_output: |
+        POST /api/v1/orders HTTP/1.1
+        query: dry_run=true
+        host: shop.example.com
+        body bytes: 26 declared: 27
+    - title: Status codes tell you which side to debug
+      language: python
+      runnable: true
+      code: |
+        def who_to_blame(status: int) -> str:
+            if 200 <= status < 300:
+                return "success"
+            if 300 <= status < 400:
+                return "redirect: follow the Location header"
+            if status in (401, 403):
+                return "client: credentials or permissions"
+            if status == 429:
+                return "client: slow down (rate limited), honour Retry-After"
+            if 400 <= status < 500:
+                return "client: fix the request"
+            return "server: retry with backoff if the operation is idempotent"
+
+        for code in (201, 302, 401, 404, 429, 503):
+            print(code, "->", who_to_blame(code))
+      annotations:
+        - "4xx means the request needs to change; 5xx means the server failed."
+        - "Only retry automatically when repeating the request is safe (idempotent)."
+      expected_output: |
+        201 -> success
+        302 -> redirect: follow the Location header
+        401 -> client: credentials or permissions
+        404 -> client: fix the request
+        429 -> client: slow down (rate limited), honour Retry-After
+        503 -> server: retry with backoff if the operation is idempotent
+  real_world: |
+    - **LLM APIs** return 429 when you exceed rate limits and 5xx during provider incidents; production clients
+      retry 429/5xx with exponential backoff and jitter.
+    - **Webhooks** (Stripe, GitHub) are HTTP POSTs to your server; you verify a signature header before trusting the body.
+    - **CDNs** (CloudFront) cache responses based on method, path and selected headers such as `Cache-Control`.
+  common_mistakes:
+    - mistake: Treating every non-200 response as "the server is down".
+      fix: Read the status code family first; 4xx errors will never succeed on retry.
+    - mistake: Retrying POST requests blindly after a timeout.
+      fix: Use idempotency keys or check state before retrying non-idempotent operations.
+    - mistake: Comparing Content-Length to the number of characters.
+      fix: Content-Length is in bytes; multi-byte UTF-8 characters change the count.
+  debugging: |
+    Work from the bottom layer up:
+
+    1. `dig api.example.com` or `nslookup` - does the name resolve?
+    2. `curl -v https://api.example.com/health` - does TCP connect and TLS succeed? `-v` prints the handshake,
+       request headers and response headers.
+    3. Compare the request you *think* you send with what `curl -v` or your HTTP client's debug logging shows.
+    4. Keep the response's request-id/trace-id header - it lets the server team find your exact request.
+  performance_security: |
+    - **Performance:** reuse connections (keep-alive / connection pools); a new TCP+TLS handshake can cost several round trips.
+      HTTP/2 multiplexes many requests over one connection.
+    - **Security:** always use HTTPS; never disable certificate verification (`verify=False`). Put secrets in headers
+      (e.g. `Authorization`), never in URLs, because URLs end up in logs and browser history.
+  interview_questions:
+    - q: What happens when you type a URL into a browser and press Enter?
+      a: The browser checks caches, resolves the hostname via DNS, opens a TCP connection, negotiates TLS, sends an HTTP request, receives the response, then parses HTML and fetches sub-resources (CSS, JS, images) over the same or new connections.
+    - q: Which HTTP methods are idempotent, and why does it matter?
+      a: GET, HEAD, PUT, DELETE and OPTIONS are idempotent by definition - repeating them has the same effect as doing them once. POST and PATCH are not, so automatic retries can create duplicates unless you add idempotency keys.
+    - q: What's the difference between 401 and 403?
+      a: 401 means the request is not authenticated (missing or invalid credentials); 403 means the caller is authenticated but not allowed to perform the action.
+  mini_challenge:
+    title: Parse a query string
+    prompt: Write `parse_query(qs)` that turns `"a=1&b=two&flag"` into a dict. Complete the linked exercise below.
+    exercise: parse-query-string
+  advanced_challenge:
+    title: Build a tiny HTTP client
+    prompt: |
+      Using Python's `socket` and `ssl` modules on your own machine, send a raw `GET /` request to a public HTTPS site,
+      parse the status line and headers, and handle `Transfer-Encoding: chunked`. Compare your output with `curl -v`.
+  further_reading:
+    - {title: "MDN: An overview of HTTP", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview"}
+    - {title: "MDN: HTTP response status codes", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"}
+    - {title: "RFC 9110: HTTP Semantics", url: "https://www.rfc-editor.org/rfc/rfc9110"}
+  version_notes: |
+    Examples use Python 3.12. HTTP/2 and HTTP/3 change the wire format but not methods, status codes or header semantics.
+quiz:
+  - prompt: Which layer proves that the server you reached really is `api.example.com`?
+    options: [DNS, TCP, TLS, HTTP]
+    answer: 2
+    explanation: TLS verifies the server's certificate against the hostname; DNS answers can be spoofed and TCP only delivers bytes.
+  - prompt: Your POST to create an order timed out. What is the safest next step?
+    options: [Retry immediately, Retry with the same idempotency key or check whether the order exists, Switch to GET, Increase the timeout to 10 minutes]
+    answer: 1
+    explanation: The order may already exist. An idempotency key (or a state check) prevents creating a duplicate.
+  - prompt: A request returns 403. What does that most likely mean?
+    options: [The server crashed, You are authenticated but not allowed to do this, DNS failed, The body is too large]
+    answer: 1
+    explanation: 403 Forbidden means the identity is known but lacks permission. 401 is for missing/invalid authentication.
+exercises:
+  - slug: parse-query-string
+    title: Parse a query string
+    kind: code
+    category: coding
+    difficulty: beginner
+    language: python
+    points: 10
+    prompt_md: |
+      Implement `parse_query(qs: str) -> dict` that parses a URL query string.
+
+      - Pairs are separated by `&`; keys and values by the first `=`.
+      - A key without `=` maps to `True` (a flag).
+      - Ignore empty segments (e.g. from `a=1&&b=2`).
+      - Later duplicates overwrite earlier ones.
+
+      Do not use `urllib`.
+    starter_code: |
+      def parse_query(qs: str) -> dict:
+          # your code here
+          return {}
+    tests:
+      function: parse_query
+      cases:
+        - {args: ["a=1&b=two"], expected: {a: "1", b: "two"}}
+        - {args: ["flag&x=1"], expected: {flag: true, x: "1"}}
+        - {args: [""], expected: {}}
+        - {args: ["a=1&&b=2"], expected: {a: "1", b: "2"}, hidden: true}
+        - {args: ["eq=a=b"], expected: {eq: "a=b"}, hidden: true}
+        - {args: ["a=1&a=2"], expected: {a: "2"}, hidden: true}
+    hints:
+      - Split on "&" first, then handle each segment.
+      - "`str.partition('=')` splits on the first '=' only and tells you whether it was found."
+    solution: |
+      def parse_query(qs: str) -> dict:
+          out = {}
+          for segment in qs.split("&"):
+              if not segment:
+                  continue
+              key, sep, value = segment.partition("=")
+              out[key] = value if sep else True
+          return out
+    explanation_md: |
+      `partition` splits on the **first** `=`, so values may contain `=`. The `sep` result distinguishes `flag` from `flag=`.
+      Skipping empty segments handles `&&` and the empty string.

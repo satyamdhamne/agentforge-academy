@@ -1,0 +1,205 @@
+slug: sql-indexes-query-plans
+title: Indexes and query plans
+summary: Read EXPLAIN output, add the index that actually helps, and learn why some queries can't use an index at all.
+minutes: 30
+level: intermediate
+tier: free
+tags: [sql, postgresql, sqlite, performance]
+prerequisites: []
+sections:
+  explanation: |
+    Without an index, the database answers `WHERE customer_id = 42` by reading **every row** (a *sequential scan*).
+    An **index** is a separate, sorted data structure (usually a B-tree) mapping column values to row locations, so the
+    database can jump straight to matching rows - O(log n) instead of O(n).
+
+    The **query planner** decides whether to use an index. `EXPLAIN` (PostgreSQL, MySQL) or `EXPLAIN QUERY PLAN` (SQLite)
+    shows its decision. `EXPLAIN ANALYZE` in PostgreSQL also runs the query and reports real timings and row counts.
+
+    Key rules:
+    - A **composite index** `(customer_id, created_at)` serves filters on `customer_id` alone, or `customer_id` + `created_at`,
+      and can return rows already sorted by `created_at` - but not filters on `created_at` alone (the *leftmost prefix* rule).
+    - Wrapping the column in a function (`lower(email) = ...`) prevents a plain index on that column from being used;
+      create an *expression index* instead.
+    - Indexes speed up reads but slow down writes and use storage. Index for your real query patterns.
+  why_it_matters: |
+    The most common production performance problem is a missing or wrong index. A query that takes 5 ms on a laptop with
+    1,000 rows can take 5 seconds with 10 million rows - and hold connections, causing a cascade of timeouts.
+  prerequisites:
+    - SELECT with WHERE, ORDER BY and LIMIT
+    - Basic idea of tables and rows
+  mental_model: |
+    A table without an index is a **novel with no index page**: to find every mention of "Paris" you read every page.
+    An index is the **index at the back of a textbook**: sorted terms with page numbers. A composite index is sorted by
+    the first column, then the second - like a phone book sorted by last name, then first name. You can't use it to
+    find everyone named "Ada" regardless of last name.
+  architecture:
+    caption: Planner choices for the same query before and after adding an index.
+    mermaid: |
+      flowchart LR
+        Q[WHERE customer_id = 42] --> P{Planner}
+        P -->|no index| S[Sequential scan: read all rows]
+        P -->|index on customer_id| I[Index search: B-tree lookup] --> R[Fetch matching rows]
+  code_examples:
+    - title: Before - a full table scan
+      language: sql
+      runnable: true
+      setup: &orders_setup |
+        CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, status TEXT, total REAL, created_at TEXT);
+        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 5000)
+        INSERT INTO orders (customer_id, status, total, created_at)
+        SELECT i % 500, CASE WHEN i % 10 = 0 THEN 'refunded' ELSE 'paid' END, (i % 97) * 1.5,
+               date('2025-01-01', '+' || (i % 365) || ' days')
+        FROM n;
+      code: |
+        EXPLAIN QUERY PLAN
+        SELECT * FROM orders WHERE customer_id = 42;
+      annotations:
+        - "SCAN means every row is read - fine for 5,000 rows, painful for 50 million."
+      expected_output: |
+        SCAN orders
+    - title: After - an index search
+      language: sql
+      runnable: true
+      setup: *orders_setup
+      code: |
+        CREATE INDEX idx_orders_customer ON orders(customer_id);
+
+        EXPLAIN QUERY PLAN
+        SELECT * FROM orders WHERE customer_id = 42;
+      annotations:
+        - "SEARCH ... USING INDEX means the planner jumps straight to matching rows."
+      expected_output: |
+        SEARCH orders USING INDEX idx_orders_customer (customer_id=?)
+    - title: Composite index that also satisfies ORDER BY
+      language: sql
+      runnable: true
+      setup: *orders_setup
+      code: |
+        CREATE INDEX idx_orders_customer_created ON orders(customer_id, created_at);
+
+        EXPLAIN QUERY PLAN
+        SELECT id, total FROM orders
+        WHERE customer_id = 42
+        ORDER BY created_at DESC
+        LIMIT 5;
+      annotations:
+        - "No 'USE TEMP B-TREE FOR ORDER BY' line: rows come out of the index already sorted."
+        - "This is the classic index for 'latest N items for a user' pages."
+      expected_output: |
+        SEARCH orders USING INDEX idx_orders_customer_created (customer_id=?)
+    - title: Functions on the column defeat a plain index
+      language: sql
+      runnable: true
+      setup: *orders_setup
+      code: |
+        CREATE INDEX idx_orders_status ON orders(status);
+
+        EXPLAIN QUERY PLAN
+        SELECT count(*) FROM orders WHERE upper(status) = 'REFUNDED';
+      annotations:
+        - "The index stores `status`, not `upper(status)`, so it can't be searched."
+        - "Fix: compare the raw column (`status = 'refunded'`) or create an expression index on upper(status)."
+      expected_output: |
+        SCAN orders
+  real_world: |
+    - **"My dashboard got slow"**: usually a new filter or sort without a matching index. Check `pg_stat_statements` for
+      the slowest queries, then `EXPLAIN (ANALYZE, BUFFERS)` them.
+    - **Foreign keys**: PostgreSQL does not index foreign key columns automatically - joins and cascading deletes on them
+      need explicit indexes.
+    - **Pagination**: `ORDER BY created_at DESC LIMIT 20` needs an index ending in `created_at`; keyset pagination
+      (`WHERE created_at < :cursor`) stays fast on deep pages where `OFFSET` does not.
+  common_mistakes:
+    - mistake: Adding an index for every column "just in case".
+      fix: Each index slows inserts/updates and uses memory. Index real query patterns and drop unused indexes (pg_stat_user_indexes).
+    - mistake: Composite index in the wrong column order.
+      fix: Put equality-filtered columns first, then range/sort columns. (customer_id, created_at), not (created_at, customer_id).
+    - mistake: Testing performance on a tiny local dataset.
+      fix: Planners choose differently on small tables. Test with production-like volumes and run ANALYZE.
+    - mistake: Building an index on a large production table with a plain CREATE INDEX.
+      fix: In PostgreSQL use CREATE INDEX CONCURRENTLY to avoid blocking writes.
+  debugging: |
+    1. Find the slow query (APM traces, `pg_stat_statements`, slow query log).
+    2. `EXPLAIN (ANALYZE, BUFFERS)` it on a production-sized replica.
+    3. Look for `Seq Scan` on big tables, large `rows` estimate errors, `Sort` nodes spilling to disk, and nested loops over many rows.
+    4. Add or adjust one index, re-run EXPLAIN ANALYZE, compare. Keep the before/after plans in the PR.
+  performance_security: |
+    - Every index has a write cost: an insert must update every index on the table.
+    - Long-running unindexed queries hold connections and locks; set `statement_timeout` to protect the database.
+    - Rows that leak through missing tenant filters are a security issue, not just a performance one - include `tenant_id`
+      as the leading column of indexes on multi-tenant tables, and always filter by it.
+  interview_questions:
+    - q: How would you investigate a slow SQL query in production?
+      a: Identify it via metrics/pg_stat_statements, run EXPLAIN (ANALYZE, BUFFERS) on a realistic dataset, look for sequential scans, misestimates and expensive sorts, add or change an index (CONCURRENTLY), and verify the new plan and latency.
+    - q: When does a composite index (a, b) help a query?
+      a: For filters on a, or on a and b, and for ORDER BY b after an equality filter on a. It generally does not help filters on b alone (leftmost prefix rule).
+    - q: Why might the planner ignore an index you created?
+      a: The query filters through a function or type cast, the predicate matches most rows (a scan is cheaper), statistics are stale, or the column order doesn't match the query.
+  mini_challenge:
+    title: Top customers by spend
+    prompt: Write the SQL for the linked exercise - it's graded by running your query against a fixed dataset.
+    exercise: sql-top-customers
+  advanced_challenge:
+    title: Keyset pagination
+    prompt: Using the orders table, implement keyset pagination for "latest orders for a customer" with a (created_at, id) cursor, design the supporting index, and show with EXPLAIN that page 100 is as cheap as page 1.
+  further_reading:
+    - {title: "PostgreSQL: Using EXPLAIN", url: "https://www.postgresql.org/docs/current/using-explain.html"}
+    - {title: "PostgreSQL: Multicolumn indexes", url: "https://www.postgresql.org/docs/current/indexes-multicolumn.html"}
+    - {title: "SQLite: EXPLAIN QUERY PLAN", url: "https://www.sqlite.org/eqp.html"}
+    - {title: "Use The Index, Luke", url: "https://use-the-index-luke.com/"}
+  version_notes: Examples run on SQLite in the sandbox; PostgreSQL shows equivalent plans as `Seq Scan` and `Index Scan`. Plan text differs between engines and versions.
+quiz:
+  - prompt: You have an index on (customer_id, created_at). Which query can use it best?
+    options: ["WHERE created_at > '2025-06-01'", "WHERE customer_id = 7 ORDER BY created_at DESC", "WHERE total > 100", "WHERE upper(status) = 'PAID'"]
+    answer: 1
+    explanation: Equality on the leading column plus ordering by the second column matches the index exactly.
+  - prompt: Why can an index make inserts slower?
+    options: [It locks the whole database, Every index must be updated on each write, Indexes compress data, It doesn't - indexes only help]
+    answer: 1
+    explanation: Each insert/update/delete also maintains every index on the table.
+exercises:
+  - slug: sql-top-customers
+    title: Top customers by spend
+    kind: code
+    category: coding
+    difficulty: intermediate
+    language: sql
+    points: 15
+    prompt_md: |
+      Tables:
+
+      ```sql
+      customers(id, name)
+      orders(id, customer_id, status, total)
+      ```
+
+      Return the **top 3 customers by total spend**, counting only orders with status `paid`.
+      Columns: `name`, `spend` (sum of totals). Order by `spend` descending.
+    starter_code: |
+      SELECT c.name, 0 AS spend
+      FROM customers c
+      LIMIT 3;
+    sql:
+      setup: |
+        CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, status TEXT, total REAL);
+        INSERT INTO customers VALUES (1,'Ada'),(2,'Grace'),(3,'Linus'),(4,'Margaret'),(5,'Ken');
+        INSERT INTO orders (customer_id, status, total) VALUES
+          (1,'paid',120),(1,'paid',80),(2,'paid',300),(2,'refunded',500),(3,'paid',50),
+          (3,'paid',60),(4,'paid',150),(4,'pending',400),(5,'paid',10),(1,'refunded',999);
+      expected_columns: [name, spend]
+      expected_rows: [["Grace", 300.0], ["Ada", 200.0], ["Margaret", 150.0]]
+      ordered: true
+    hints:
+      - JOIN orders to customers and filter on status before aggregating.
+      - GROUP BY the customer, SUM the totals, ORDER BY the sum descending, LIMIT 3.
+    solution: |
+      SELECT c.name, SUM(o.total) AS spend
+      FROM customers c
+      JOIN orders o ON o.customer_id = c.id
+      WHERE o.status = 'paid'
+      GROUP BY c.id, c.name
+      ORDER BY spend DESC
+      LIMIT 3;
+    explanation_md: |
+      Filtering with WHERE before GROUP BY excludes refunded and pending orders from the sums. Grouping by `c.id`
+      (not just name) is safer when two customers share a name.

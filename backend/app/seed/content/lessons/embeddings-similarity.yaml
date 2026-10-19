@@ -1,0 +1,192 @@
+slug: embeddings-similarity
+title: Embeddings and similarity search
+summary: Turn text into vectors, compare them with cosine similarity, and understand what vector databases actually do.
+minutes: 25
+level: beginner
+tier: free
+tags: [embeddings, vectors, rag, generative-ai]
+prerequisites: [tokens-context-windows]
+sections:
+  explanation: |
+    An **embedding** is a list of numbers (a vector) that represents the meaning of a piece of text. Embedding models
+    are trained so that texts with similar meaning get vectors that point in similar directions.
+
+    **Cosine similarity** measures the angle between two vectors: 1.0 = same direction, 0 = unrelated (orthogonal),
+    -1 = opposite. Similarity search embeds a query and returns the stored vectors with the highest similarity.
+
+    A **vector database** (or extension like **pgvector**) stores vectors and uses approximate nearest-neighbour (ANN)
+    indexes such as **HNSW** or **IVFFlat** to search millions of vectors quickly - trading a little recall for a lot of speed.
+  why_it_matters: |
+    Embeddings power semantic search, RAG, deduplication, clustering, recommendations and classification. Knowing how
+    similarity works helps you debug "why did retrieval return that?" instead of treating search as magic.
+  prerequisites:
+    - Python lists and functions
+    - High-school vectors (length, dot product) help but aren't required
+  mental_model: |
+    Imagine every sentence as an **arrow** in a huge room. Sentences about refunds point roughly the same way; sentences
+    about Kubernetes point elsewhere. Search means: draw the arrow for the question, then find the arrows pointing most
+    nearly in the same direction. The length of the arrow doesn't matter - only its direction - which is why we use cosine.
+  architecture:
+    caption: Indexing and querying with embeddings.
+    mermaid: |
+      flowchart LR
+        D[Documents] --> C[Chunk] --> E1[Embed] --> V[(Vector index: pgvector / HNSW)]
+        Q[Query] --> E2[Embed] --> S[Nearest neighbours]
+        V --> S --> R[Top-k passages]
+  code_examples:
+    - title: Cosine similarity from scratch
+      language: python
+      runnable: true
+      code: |
+        import math
+
+        def cosine(a, b):
+            dot = sum(x * y for x, y in zip(a, b))
+            norm_a = math.sqrt(sum(x * x for x in a))
+            norm_b = math.sqrt(sum(y * y for y in b))
+            return dot / (norm_a * norm_b)
+
+        print(round(cosine([1, 0], [1, 0]), 3))     # same direction
+        print(round(cosine([1, 0], [0, 1]), 3))     # orthogonal
+        print(round(cosine([1, 2], [2, 4]), 3))     # same direction, different length
+        print(round(cosine([1, 0], [-1, 0]), 3))    # opposite
+      annotations:
+        - "Cosine ignores vector length, so [1, 2] and [2, 4] are identical in direction."
+        - "Many embedding APIs return normalised vectors, so cosine equals the dot product."
+      expected_output: |
+        1.0
+        0.0
+        1.0
+        -1.0
+    - title: Semantic-ish search with a bag-of-words embedding
+      language: python
+      runnable: true
+      code: |
+        import math, re
+        from collections import Counter
+
+        docs = {
+            "refunds": "Refunds are issued to the original payment card within 5 business days.",
+            "pto": "Employees accrue 20 days of paid time off per year.",
+            "deploy": "Deployments run through CI and require one approval.",
+        }
+
+        def embed(text):
+            # Real systems use a neural embedding model; word counts are a transparent stand-in.
+            return Counter(re.findall(r"[a-z]+", text.lower()))
+
+        def cosine(a, b):
+            dot = sum(a[k] * b[k] for k in a)
+            return dot / (math.sqrt(sum(v * v for v in a.values())) * math.sqrt(sum(v * v for v in b.values())))
+
+        index = {doc_id: embed(text) for doc_id, text in docs.items()}
+
+        def search(query, k=2):
+            q = embed(query)
+            scored = sorted(((cosine(q, v), doc_id) for doc_id, v in index.items()), reverse=True)
+            return [(doc_id, round(score, 2)) for score, doc_id in scored[:k]]
+
+        print(search("how many days of paid time off do employees get"))
+        print(search("when will my refund reach my card"))
+      annotations:
+        - "Word overlap works when the query reuses document words..."
+        - "...but 'vacation' would not match 'paid time off' - that's what neural embeddings fix."
+      expected_output: |
+        [('pto', 0.63), ('refunds', 0.1)]
+        [('refunds', 0.1), ('pto', 0.0)]
+  real_world: |
+    - **RAG:** retrieve the most similar chunks to ground an LLM's answer.
+    - **Support deflection:** find similar resolved tickets.
+    - **Deduplication:** flag near-duplicate documents or bug reports above a similarity threshold.
+    - **pgvector:** `ORDER BY embedding <=> :query LIMIT 5` returns the 5 nearest rows by cosine distance, and can be
+      combined with ordinary `WHERE tenant_id = :t` filters.
+  common_mistakes:
+    - mistake: Comparing embeddings from different models (or versions).
+      fix: Vectors are only comparable within one model; re-embed everything when you change models.
+    - mistake: Treating similarity scores as calibrated probabilities.
+      fix: Score ranges differ per model; choose thresholds empirically on your own labelled data.
+    - mistake: Relying on vector search alone for IDs, codes and exact phrases.
+      fix: Use hybrid search (keyword/BM25 + vectors) - embeddings are weak at exact tokens like "ERR-4012".
+  debugging: |
+    - For a bad result, print the top-k with scores and the chunk text: is the right chunk missing (recall) or ranked low (ranking)?
+    - Check the query you actually embedded (after rewriting/templating).
+    - Spot-check that identical text produces similarity ≈ 1.0 - if not, you're mixing models or normalisation.
+  performance_security: |
+    - ANN indexes (HNSW) trade recall for speed; tune parameters (e.g. `ef_search`) against a recall benchmark.
+    - Store the model name and dimension alongside vectors.
+    - Embeddings can leak information about the source text; protect them like the text itself and apply the same
+      tenant and permission filters at query time.
+  interview_questions:
+    - q: Why use cosine similarity instead of Euclidean distance for text embeddings?
+      a: Cosine focuses on direction (meaning) and ignores magnitude, which often reflects length or frequency rather than meaning. For normalised vectors the two rankings are equivalent.
+    - q: What is the trade-off of approximate nearest-neighbour indexes?
+      a: They are much faster and use less compute than exact search but may miss some true nearest neighbours; parameters trade recall for latency and memory.
+    - q: When is keyword search better than vector search?
+      a: For exact identifiers, error codes, names and rare terms; most production systems combine both (hybrid search).
+  mini_challenge:
+    title: Top-k by cosine
+    prompt: Implement `top_k(query, vectors, k)` that returns the ids of the k most similar vectors. See the linked exercise.
+    exercise: cosine-top-k
+  advanced_challenge:
+    title: pgvector with tenant filters
+    prompt: Create a PostgreSQL table with a `vector(384)` column and `tenant_id`, add an HNSW index, insert sample embeddings from an open-source model, and write a query that returns the top 5 matches for one tenant only. Measure recall@5 against exact search.
+  further_reading:
+    - {title: "pgvector README", url: "https://github.com/pgvector/pgvector"}
+    - {title: "Sentence Transformers documentation", url: "https://www.sbert.net/"}
+    - {title: "HNSW paper (Malkov & Yashunin)", url: "https://arxiv.org/abs/1603.09320"}
+  version_notes: The examples use word counts to stay offline and dependency-free. Swap `embed()` for a real embedding model to get semantic matches.
+quiz:
+  - prompt: What does a cosine similarity of 0 mean?
+    options: [Identical vectors, Opposite vectors, Orthogonal - unrelated directions, One vector is empty]
+    answer: 2
+    explanation: Cosine 0 means the vectors are at 90 degrees.
+  - prompt: You switched embedding models. What must you do with stored vectors?
+    options: [Nothing, Re-embed all documents with the new model, Normalise them, Convert them to integers]
+    answer: 1
+    explanation: Vectors from different models live in different spaces and can't be compared.
+exercises:
+  - slug: cosine-top-k
+    title: Top-k by cosine similarity
+    kind: code
+    category: rag
+    difficulty: beginner
+    language: python
+    points: 10
+    prompt_md: |
+      Implement `top_k(query, vectors, k)`.
+
+      - `query` is a list of floats; `vectors` is a dict id → list of floats (same length).
+      - Return the ids of the `k` vectors with the highest cosine similarity, best first.
+      - Break ties by id ascending. Skip zero-length vectors (all zeros).
+    starter_code: |
+      import math
+
+      def top_k(query, vectors, k):
+          # your code here
+          return []
+    tests:
+      function: top_k
+      cases:
+        - {args: [[1, 0], {"a": [1, 0], "b": [0, 1], "c": [1, 1]}, 2], expected: ["a", "c"]}
+        - {args: [[0, 1], {"a": [1, 0], "b": [0, 2]}, 1], expected: ["b"]}
+        - {args: [[1, 1], {"x": [2, 2], "y": [1, 1], "z": [0, 0]}, 3], expected: ["x", "y"], hidden: true}
+        - {args: [[1, 0], {"b": [1, 0], "a": [3, 0]}, 2], expected: ["a", "b"], hidden: true}
+    hints:
+      - Compute the query norm once; skip vectors whose norm is 0.
+      - Sort by (-score, id) to get best-first with deterministic ties.
+    solution: |
+      import math
+
+      def top_k(query, vectors, k):
+          qn = math.sqrt(sum(x * x for x in query))
+          scored = []
+          for vid, vec in vectors.items():
+              vn = math.sqrt(sum(x * x for x in vec))
+              if vn == 0 or qn == 0:
+                  continue
+              score = sum(a * b for a, b in zip(query, vec)) / (qn * vn)
+              scored.append((-round(score, 12), vid))
+          return [vid for _, vid in sorted(scored)[:k]]
+    explanation_md: |
+      Rounding the score before sorting avoids tiny floating-point differences breaking ties (e.g. [2,2] vs [1,1] both have
+      cosine 1 with [1,1]). Zero vectors have no direction, so cosine is undefined - skip them.

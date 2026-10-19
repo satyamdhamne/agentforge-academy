@@ -1,0 +1,290 @@
+slug: fastapi-dependency-injection
+title: Dependency injection in FastAPI
+summary: Use Depends() for database sessions, authentication and permissions - and override dependencies cleanly in tests.
+minutes: 25
+level: intermediate
+tier: free
+tags: [fastapi, python, architecture, testing]
+prerequisites: [python-generators]
+sections:
+  explanation: |
+    **Dependency injection (DI)** means a function declares *what it needs* instead of creating it. In FastAPI you
+    declare dependencies with `Depends(...)`:
+
+    ```python
+    @app.get("/me")
+    def me(user: User = Depends(get_current_user)):
+        return user
+    ```
+
+    For every request FastAPI builds a **dependency graph**: `get_current_user` may itself depend on `get_db` and on the
+    request cookies. FastAPI resolves the graph, **caches each dependency once per request**, and passes results in.
+    Dependencies written as generators (`yield`) get setup *and* teardown - perfect for database sessions.
+  why_it_matters: |
+    DI keeps endpoints small and focused, centralises cross-cutting concerns (auth, DB sessions, rate limits, feature flags),
+    and makes testing easy: you swap a dependency for a fake with `app.dependency_overrides` instead of patching globals.
+  prerequisites:
+    - Python functions and type hints
+    - Generators with yield (setup/teardown)
+    - Basic FastAPI routes
+  mental_model: |
+    A restaurant kitchen ticket says "needs: sharp knife, clean pan, chef on duty". The kitchen manager (FastAPI) hands
+    over the tools before cooking and cleans them afterwards. If two recipe steps both need the pan in the same order,
+    the manager hands over the *same* pan. In tests, you tell the manager to hand over a toy pan instead.
+  architecture:
+    caption: The dependency graph for an authenticated endpoint. get_db is resolved once and shared.
+    mermaid: |
+      flowchart TD
+        E[GET /me endpoint] --> U[get_current_user]
+        U --> DB[get_db: yield session]
+        U --> C[session cookie]
+        E --> P[require_role 'learner']
+        P --> U
+  code_examples:
+    - title: The idea without FastAPI - a tiny resolver
+      language: python
+      runnable: true
+      code: |
+        import inspect
+
+        class Depends:
+            def __init__(self, fn):
+                self.fn = fn
+
+        def resolve(fn, cache):
+            """Call fn, first resolving any parameter whose default is Depends(...). Cache per 'request'."""
+            kwargs = {}
+            for name, param in inspect.signature(fn).parameters.items():
+                if isinstance(param.default, Depends):
+                    dep = param.default.fn
+                    if dep not in cache:
+                        cache[dep] = resolve(dep, cache)
+                    kwargs[name] = cache[dep]
+            return fn(**kwargs)
+
+        calls = []
+
+        def get_db():
+            calls.append("db opened")
+            return {"users": {"tok123": "ada"}}
+
+        def get_token():
+            return "tok123"
+
+        def get_current_user(db=Depends(get_db), token=Depends(get_token)):
+            return db["users"][token]
+
+        def endpoint(user=Depends(get_current_user), db=Depends(get_db)):
+            return f"hello {user} ({len(db['users'])} user in db)"
+
+        print(resolve(endpoint, cache={}))
+        print(calls)   # get_db ran once even though two functions depend on it
+      annotations:
+        - "This is (a very small part of) what FastAPI does for you on every request."
+        - "The per-request cache is why one DB session is shared by everything in a request."
+      expected_output: |
+        hello ada (1 user in db)
+        ['db opened']
+    - title: Real FastAPI - session, auth and role dependencies
+      language: python
+      runnable: false
+      code: |
+        from fastapi import Depends, FastAPI, HTTPException, Request
+        from sqlalchemy.orm import Session
+
+        app = FastAPI()
+
+        def get_db():
+            db = SessionLocal()
+            try:
+                yield db              # the endpoint runs here
+            finally:
+                db.close()            # teardown always runs
+
+        def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+            token = request.cookies.get("session")
+            user = lookup_session(db, token) if token else None
+            if user is None:
+                raise HTTPException(status_code=401, detail="Sign in required")
+            return user
+
+        def require_role(role: str):
+            def checker(user: User = Depends(get_current_user)) -> User:
+                if role not in user.roles:
+                    raise HTTPException(status_code=403, detail=f"Requires {role}")
+                return user
+            return checker            # a dependency *factory* - note the closure over `role`
+
+        @app.get("/admin/stats")
+        def stats(user: User = Depends(require_role("admin")), db: Session = Depends(get_db)):
+            return {"users": db.query(User).count()}
+      annotations:
+        - "`yield` dependencies give you setup/teardown around the request."
+        - "require_role is a factory returning a dependency - a closure over the role name."
+        - "This snippet needs FastAPI and a database, so it is shown read-only."
+      expected_output: |
+        GET /admin/stats without a session  -> 401 {"detail": "Sign in required"}
+        GET /admin/stats as a learner       -> 403 {"detail": "Requires admin"}
+        GET /admin/stats as an admin        -> 200 {"users": 42}
+    - title: Overriding dependencies in tests
+      language: python
+      runnable: false
+      code: |
+        from fastapi.testclient import TestClient
+
+        def fake_admin() -> User:
+            return User(id=1, email="admin@test", roles={"admin"})
+
+        app.dependency_overrides[get_current_user] = fake_admin
+        client = TestClient(app)
+        assert client.get("/admin/stats").status_code == 200
+        app.dependency_overrides.clear()   # don't leak overrides into other tests
+      annotations:
+        - "Override the dependency the endpoint (indirectly) uses - no monkeypatching of globals."
+      expected_output: |
+        Test passes without a real session cookie.
+  real_world: |
+    - **DB sessions per request** with commit/rollback handling in one place.
+    - **Auth and RBAC:** `Depends(get_current_user)`, `Depends(require_role("admin"))`.
+    - **Rate limiting and feature flags** as dependencies attached via `dependencies=[...]` on routers.
+    - **Multi-tenant apps:** a `get_tenant` dependency reads the tenant from the user/subdomain and every query filters by it.
+  common_mistakes:
+    - mistake: Creating a DB session at import time (a global) and sharing it across requests.
+      fix: Create sessions in a yield dependency so each request gets its own and it is always closed.
+    - mistake: Passing a function instead of `Depends(function)` as a default.
+      fix: The default must be `Depends(fn)`; otherwise FastAPI treats the parameter as a query parameter or fails.
+    - mistake: Doing heavy work in a dependency used by every route.
+      fix: Dependencies run on every request; cache expensive lookups or scope them to the routes that need them.
+  debugging: |
+    - Open `/docs`: dependency parameters that read query/header/cookie values appear in the OpenAPI schema - surprising
+      query parameters usually mean a missing `Depends`.
+    - Add a print/log in each dependency to see the resolution order and confirm caching.
+    - In tests, assert `app.dependency_overrides` is cleared in a fixture teardown.
+  performance_security: |
+    - Put authorisation in dependencies so it can't be forgotten on new endpoints; apply router-level dependencies for whole areas (e.g. `/admin`).
+    - Never trust IDs from the request body for tenant scoping - derive the tenant from the authenticated user in a dependency.
+    - Sync dependencies run in a threadpool; avoid blocking I/O in async dependencies.
+  interview_questions:
+    - q: How does FastAPI's Depends differ from calling a helper function inside the endpoint?
+      a: FastAPI resolves the dependency graph, caches each dependency per request, manages yield teardown, documents parameters in OpenAPI, and lets tests override dependencies without patching.
+    - q: How would you guarantee a DB session is closed even if the endpoint raises?
+      a: Use a generator dependency with try/finally around the yield; FastAPI runs the finally block after the response or on errors.
+  mini_challenge:
+    title: Resolve with caching
+    prompt: Extend the tiny resolver so dependencies with `use_cache=False` run every time they are requested. Complete the linked exercise.
+    exercise: di-resolver-cache
+  advanced_challenge:
+    title: Tenant-scoped repository
+    prompt: Build a FastAPI app where a `get_tenant` dependency derives the tenant from the user and a `get_repo` dependency returns a repository that automatically filters every query by tenant. Write a test proving users can't read another tenant's data.
+  further_reading:
+    - {title: "FastAPI: Dependencies", url: "https://fastapi.tiangolo.com/tutorial/dependencies/"}
+    - {title: "FastAPI: Dependencies with yield", url: "https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/"}
+    - {title: "FastAPI: Testing dependencies with overrides", url: "https://fastapi.tiangolo.com/advanced/testing-dependencies/"}
+  version_notes: FastAPI 0.110+ with Pydantic v2. `Annotated[User, Depends(get_current_user)]` is the modern equivalent spelling.
+quiz:
+  - prompt: Two dependencies in the same request both depend on get_db. How many times does get_db run (default settings)?
+    options: [Once, Twice, Once per endpoint parameter, It depends on the number of queries]
+    answer: 0
+    explanation: FastAPI caches dependency results per request unless use_cache=False.
+  - prompt: How do you swap a real auth dependency for a fake one in tests?
+    options: [Monkeypatch the module, "app.dependency_overrides[real] = fake", Set an environment variable, Edit the endpoint signature]
+    answer: 1
+    explanation: dependency_overrides replaces the dependency everywhere it is used, including nested dependencies.
+exercises:
+  - slug: di-resolver-cache
+    title: Dependency resolver with use_cache
+    kind: code
+    category: coding
+    difficulty: intermediate
+    language: python
+    points: 15
+    prompt_md: |
+      Implement `count_calls(use_cache)`. It must build a tiny resolver where `Depends(fn, use_cache=True)` caches results
+      per resolution (like FastAPI) and `use_cache=False` calls `fn` every time it is requested.
+
+      The scenario is fixed: an endpoint depends on `a` and `b`; both `a` and `b` depend on `counter`.
+      Return how many times `counter` ran when the endpoint was resolved once.
+
+      - `count_calls(True)` → `1`
+      - `count_calls(False)` → `2`
+    starter_code: |
+      import inspect
+
+      class Depends:
+          def __init__(self, fn, use_cache=True):
+              self.fn = fn
+              self.use_cache = use_cache
+
+      def resolve(fn, cache):
+          # TODO: resolve parameters whose default is a Depends(...)
+          return fn()
+
+      def count_calls(use_cache):
+          runs = []
+
+          def counter():
+              runs.append(1)
+              return len(runs)
+
+          def a(c=Depends(counter, use_cache=use_cache)):
+              return c
+
+          def b(c=Depends(counter, use_cache=use_cache)):
+              return c
+
+          def endpoint(x=Depends(a), y=Depends(b)):
+              return (x, y)
+
+          resolve(endpoint, {})
+          return len(runs)
+    tests:
+      function: count_calls
+      cases:
+        - {args: [true], expected: 1}
+        - {args: [false], expected: 2}
+    hints:
+      - Use inspect.signature(fn).parameters and check isinstance(param.default, Depends).
+      - Only read/write the cache when the Depends has use_cache=True.
+    solution: |
+      import inspect
+
+      class Depends:
+          def __init__(self, fn, use_cache=True):
+              self.fn = fn
+              self.use_cache = use_cache
+
+      def resolve(fn, cache):
+          kwargs = {}
+          for name, param in inspect.signature(fn).parameters.items():
+              dep = param.default
+              if isinstance(dep, Depends):
+                  if dep.use_cache and dep.fn in cache:
+                      kwargs[name] = cache[dep.fn]
+                  else:
+                      value = resolve(dep.fn, cache)
+                      if dep.use_cache:
+                          cache[dep.fn] = value
+                      kwargs[name] = value
+          return fn(**kwargs)
+
+      def count_calls(use_cache):
+          runs = []
+
+          def counter():
+              runs.append(1)
+              return len(runs)
+
+          def a(c=Depends(counter, use_cache=use_cache)):
+              return c
+
+          def b(c=Depends(counter, use_cache=use_cache)):
+              return c
+
+          def endpoint(x=Depends(a), y=Depends(b)):
+              return (x, y)
+
+          resolve(endpoint, {})
+          return len(runs)
+    explanation_md: |
+      The cache is keyed by the dependency function and lives for one resolution (one request). Skipping the cache
+      for `use_cache=False` mirrors FastAPI's behaviour for dependencies that must run fresh each time.

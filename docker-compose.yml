@@ -1,0 +1,81 @@
+# Local full stack:  cp .env.example .env  (optional)  &&  docker compose up --build
+# App: http://localhost:8080   API docs: http://localhost:8000/api/v1/docs
+name: agentforge
+
+services:
+  db:
+    image: pgvector/pgvector:pg16   # PostgreSQL 16 with pgvector ready for the RAG lab (Phase 4)
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agentforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentforge}
+      POSTGRES_DB: ${POSTGRES_DB:-agentforge}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentforge} -d ${POSTGRES_DB:-agentforge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [app]
+
+  # Learner code runs here, never in the API process. No internet (internal network), no AWS
+  # credentials, read-only root filesystem, no capabilities, and hard CPU/memory/process limits.
+  sandbox:
+    build: ./sandbox
+    environment:
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-dev-sandbox-token-change-me}
+      SANDBOX_MAX_CONCURRENCY: "2"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    networks: [sandbox]
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ENV: ${ENV:-development}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-agentforge}:${POSTGRES_PASSWORD:-agentforge}@db:5432/${POSTGRES_DB:-agentforge}
+      SANDBOX_URL: http://sandbox:8080
+      SANDBOX_TOKEN: ${SANDBOX_TOKEN:-dev-sandbox-token-change-me}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      SEED_ON_START: ${SEED_ON_START:-1}
+      TRUSTED_PROXIES: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+      sandbox:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks: [app, sandbox]
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    networks: [app]
+
+networks:
+  app: {}
+  sandbox:
+    internal: true   # no route to the internet
+
+volumes:
+  pgdata: {}

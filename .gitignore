@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.log

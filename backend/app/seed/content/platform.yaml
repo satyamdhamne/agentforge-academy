@@ -1,0 +1,121 @@
+# Plans, achievements, real-world projects and announcements.
+
+# Feature limits per plan. limit: null = unlimited; enabled: false = not included.
+entitlements:
+  free:
+    sandbox_runs_per_day: {limit: 100}
+    agent_runs_per_day: {limit: 25}
+    real_model_agent_runs: {enabled: false}
+    pro_content: {enabled: false}
+    team_dashboards: {enabled: false}
+  pro:
+    sandbox_runs_per_day: {limit: 1000}
+    agent_runs_per_day: {limit: 200}
+    real_model_agent_runs: {enabled: true}
+    pro_content: {enabled: true}
+    team_dashboards: {enabled: false}
+  team:
+    sandbox_runs_per_day: {limit: null}
+    agent_runs_per_day: {limit: 500}
+    real_model_agent_runs: {enabled: true}
+    pro_content: {enabled: true}
+    team_dashboards: {enabled: true}
+
+# Badges are granted only by server-side rules over verifiable records (see app/services/achievements.py).
+achievements:
+  - {slug: first-lesson, name: First Steps, icon: footprints, description: Complete your first lesson (quiz passed)., criteria: {type: lessons_completed, min: 1}}
+  - {slug: five-lessons, name: Momentum, icon: flame, description: Complete five lessons., criteria: {type: lessons_completed, min: 5}}
+  - {slug: ten-lessons, name: Deep Diver, icon: layers, description: Complete ten lessons., criteria: {type: lessons_completed, min: 10}}
+  - {slug: first-challenge, name: Problem Solver, icon: target, description: Pass your first graded challenge., criteria: {type: challenges_passed, min: 1}}
+  - {slug: ten-challenges, name: Challenge Crusher, icon: trophy, description: Pass ten different graded challenges., criteria: {type: challenges_passed, min: 10}}
+  - {slug: first-agent-run, name: Agent Operator, icon: bot, description: Run a reference agent and inspect its trace., criteria: {type: agent_runs, min: 1}}
+  - {slug: streak-3, name: Three-Day Streak, icon: calendar-check, description: Learn on three consecutive days., criteria: {type: streak_days, min: 3}}
+  - {slug: streak-7, name: Week Warrior, icon: calendar-heart, description: Learn on seven consecutive days., criteria: {type: streak_days, min: 7}}
+  - {slug: rag-track-complete, name: Retrieval Engineer, icon: database-zap, description: Complete every published lesson in RAG Engineering., criteria: {type: track_completed, track: rag-engineering}}
+  - {slug: agentic-track-complete, name: Agent Architect, icon: workflow, description: Complete every published lesson in Agentic AI., criteria: {type: track_completed, track: agentic-ai}}
+
+projects:
+  - slug: url-shortener-api
+    title: Production-ready URL shortener API
+    difficulty: beginner
+    track: fastapi
+    hours: 8
+    tier: free
+    summary: Build a FastAPI service with PostgreSQL, input validation, rate limiting, tests and a Dockerfile - the classic first backend project done properly.
+    skills: [FastAPI, PostgreSQL, Pydantic, Docker, pytest]
+    requirements:
+      - "POST /links creates a short code (collision-safe); GET /{code} redirects with 307"
+      - Validate URLs and block private/internal addresses (SSRF awareness)
+      - Per-IP rate limiting and click counting without double counts
+      - Alembic migrations, >80% test coverage, docker compose up works from a clean clone
+  - slug: docs-rag-assistant
+    title: Documentation Q&A assistant with citations
+    difficulty: intermediate
+    track: rag-engineering
+    hours: 16
+    tier: free
+    summary: Index a public documentation site, answer questions with cited passages, and prove quality with a labelled evaluation set.
+    skills: [RAG, pgvector, embeddings, evaluation, FastAPI]
+    requirements:
+      - Ingestion pipeline with structure-aware chunking and incremental re-indexing
+      - Hybrid search (keyword + vector) fused with reciprocal rank fusion
+      - Answers cite source passages; refuses when the context is insufficient
+      - 30+ labelled questions with recall@5, MRR and a faithfulness spot-check report
+  - slug: pr-review-bot
+    title: GitHub PR review bot with approval gates
+    difficulty: intermediate
+    track: agentic-ai
+    hours: 20
+    tier: pro
+    summary: Extend the reference PR Review Agent into a GitHub App that comments on pull requests - with deterministic checks first and a human approval step before posting.
+    skills: [GitHub Apps, webhooks, agents, LLM providers, security]
+    requirements:
+      - Verify webhook signatures; least-privilege app permissions
+      - Deterministic secret/SQL-injection checks run before any model call
+      - Comments are drafted, then posted only after maintainer approval
+      - Cost and latency per review recorded; eval set of 20 real diffs
+  - slug: incident-copilot
+    title: On-call incident copilot
+    difficulty: advanced
+    track: agentic-ai
+    hours: 30
+    tier: pro
+    summary: An agent that reads logs and metrics through read-only tools, proposes hypotheses with evidence and drafts a status update - without ever touching production.
+    skills: [LangGraph, tool calling, observability, AWS CloudWatch]
+    requirements:
+      - Read-only tools with argument validation and per-run budgets
+      - Every hypothesis links to the log lines or metrics that support it
+      - Runs are traced (OpenTelemetry) and replayable with a mock provider
+      - Runbook actions require explicit human approval and are audit-logged
+  - slug: multi-tenant-saas-starter
+    title: Multi-tenant SaaS starter on AWS
+    difficulty: advanced
+    track: aws-devops
+    hours: 40
+    tier: pro
+    summary: Deploy a FastAPI + React app to ECS Fargate and RDS with Terraform, GitHub Actions OIDC, tenant isolation and cost alarms.
+    skills: [Terraform, ECS, RDS, IAM, GitHub Actions, CloudWatch]
+    requirements:
+      - Terraform modules for VPC, ECS service, RDS and secrets; remote state with locking
+      - CI deploys via OIDC (no long-lived AWS keys) with migrations and rollback
+      - Tenant-aware authorization tested with cross-tenant access tests
+      - Budget alarms and a written monthly cost estimate
+  - slug: eval-harness
+    title: LLM evaluation harness for prompts and agents
+    difficulty: intermediate
+    track: generative-ai
+    hours: 12
+    tier: free
+    summary: Build a small, provider-agnostic evaluation runner with assertions, rubric scoring and regression reports you can run in CI.
+    skills: [Python, evaluation, CI, JSON Schema]
+    requirements:
+      - JSONL test cases with typed checks (equals, contains, regex, schema)
+      - Runs against mock and real providers; caches responses for reproducibility
+      - Fails CI when the pass rate regresses versus the main branch
+      - HTML report with per-case diffs
+
+announcements:
+  - title: Welcome to AgentForge Academy
+    body_md: |
+      Start with a learning path, run every code example in the lab, and open the **AI Agent Library** to see ten
+      reference agents with real traces, tests and evaluation reports. New lessons ship weekly.

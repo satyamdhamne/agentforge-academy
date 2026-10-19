@@ -1,0 +1,201 @@
+slug: workflows-vs-agents
+title: Workflows vs agents
+summary: Know when a fixed workflow beats an autonomous agent - and build both to see the trade-offs in cost, reliability and control.
+minutes: 30
+level: intermediate
+tier: free
+tags: [agents, architecture, llm, design]
+prerequisites: [tokens-context-windows]
+sections:
+  explanation: |
+    An LLM application sits somewhere on a spectrum:
+
+    1. **Deterministic code** - no model at all (rules, SQL, scripts).
+    2. **Single call** - one prompt, one structured answer (classify, extract, summarise).
+    3. **Workflow** - *your code* decides the steps; the model fills in some of them (prompt chaining, routing,
+       parallel calls, evaluator-optimizer loops with a fixed retry limit).
+    4. **Agent** - *the model* decides which tool to call next and when to stop, in a loop, within limits you set.
+
+    Agents shine when the steps can't be known in advance (open-ended investigation, varied evidence needs).
+    Everywhere else, workflows are cheaper, faster, easier to test and easier to explain. Start at the lowest level that
+    solves the problem and move up only when evaluation shows you need to.
+  why_it_matters: |
+    "Let's build an agent" is the most common over-engineering mistake in AI projects. Choosing the right level is the
+    difference between a predictable feature with a known cost and a fragile system that loops, wanders and is hard to debug.
+  prerequisites:
+    - What a prompt and a model API call are
+    - Basic Python
+  mental_model: |
+    A **workflow** is a recipe: step 1, step 2, step 3 - a chef (the model) does the cooking, but the order is fixed.
+    An **agent** is giving a cook a goal ("make dinner for 4 from what's in the fridge"), a set of tools, a budget and a
+    deadline, and letting them decide each next step. You hire the second cook only when recipes can't cover the variety
+    of requests - and you still lock the knife drawer (permissions) and check the result (evaluation).
+  architecture:
+    caption: The same task as a workflow and as an agent.
+    mermaid: |
+      flowchart TB
+        subgraph Workflow[Workflow: code decides]
+          A1[Input] --> A2[classify] --> A3{route} --> A4[handler] --> A5[Output]
+        end
+        subgraph Agent[Agent: model decides]
+          B1[Goal] --> B2{LLM: next step?}
+          B2 -->|tool call| B3[Tool] --> B2
+          B2 -->|done| B4[Output]
+        end
+  code_examples:
+    - title: A workflow - fixed steps, model fills in one step
+      language: python
+      runnable: true
+      code: |
+        def fake_llm_classify(ticket: str) -> str:
+            # Stand-in for a model call that returns a label from a fixed set
+            text = ticket.lower()
+            if "refund" in text or "charged" in text:
+                return "billing"
+            if "password" in text or "login" in text:
+                return "account"
+            return "general"
+
+        HANDLERS = {
+            "billing": lambda t: "Routed to billing queue (SLA 4h)",
+            "account": lambda t: "Sent password-reset instructions",
+            "general": lambda t: "Routed to tier-1 support",
+        }
+
+        def support_workflow(ticket: str) -> str:
+            label = fake_llm_classify(ticket)          # step 1: model
+            assert label in HANDLERS                   # step 2: validate model output
+            return f"[{label}] " + HANDLERS[label](ticket)   # step 3: deterministic action
+
+        for t in ["I was charged twice", "Can't login after reset", "Do you have a dark mode?"]:
+            print(support_workflow(t))
+      annotations:
+        - "The model's freedom is limited to choosing a label from a fixed set."
+        - "Every path is testable with ordinary unit tests."
+      expected_output: |
+        [billing] Routed to billing queue (SLA 4h)
+        [account] Sent password-reset instructions
+        [general] Routed to tier-1 support
+    - title: An agent - the model chooses tools until it's done (with a step budget)
+      language: python
+      runnable: true
+      code: |
+        import json
+
+        INVENTORY = {"keyboard": 3, "monitor": 0}
+        SUPPLIERS = {"monitor": "ACME Displays (restock in 5 days)"}
+
+        TOOLS = {
+            "check_stock": lambda item: {"item": item, "in_stock": INVENTORY.get(item, 0)},
+            "find_supplier": lambda item: {"item": item, "supplier": SUPPLIERS.get(item, "unknown")},
+        }
+
+        def scripted_model(goal, history):
+            """Stand-in for an LLM choosing the next action from the conversation so far."""
+            seen = [h["tool"] for h in history]
+            if "check_stock" not in seen:
+                return {"tool": "check_stock", "args": {"item": goal}}
+            stock = history[0]["result"]["in_stock"]
+            if stock == 0 and "find_supplier" not in seen:
+                return {"tool": "find_supplier", "args": {"item": goal}}
+            if stock > 0:
+                return {"final": f"{goal}: {stock} in stock, ship today"}
+            return {"final": f"{goal}: out of stock - {history[-1]['result']['supplier']}"}
+
+        def run_agent(goal, max_steps=4):
+            history = []
+            for step in range(1, max_steps + 1):
+                action = scripted_model(goal, history)
+                if "final" in action:
+                    return action["final"], step
+                if action["tool"] not in TOOLS:                  # allowlist
+                    raise ValueError("unknown tool")
+                result = TOOLS[action["tool"]](**action["args"])
+                history.append({"tool": action["tool"], "result": result})
+                print(f"  step {step}: {action['tool']} -> {json.dumps(result)}")
+            return "gave up (step budget exhausted)", max_steps
+
+        for item in ["keyboard", "monitor"]:
+            answer, steps = run_agent(item)
+            print(f"{answer} (decided in {steps} steps)")
+      annotations:
+        - "The number of steps depends on what the tools return - that's what makes it an agent."
+        - "Note the safety rails: tool allowlist and a step budget."
+      expected_output: |2
+          step 1: check_stock -> {"item": "keyboard", "in_stock": 3}
+        keyboard: 3 in stock, ship today (decided in 2 steps)
+          step 1: check_stock -> {"item": "monitor", "in_stock": 0}
+          step 2: find_supplier -> {"item": "monitor", "supplier": "ACME Displays (restock in 5 days)"}
+        monitor: out of stock - ACME Displays (restock in 5 days) (decided in 3 steps)
+  real_world: |
+    - **Workflows:** ticket classification + routing, invoice extraction + validation, release notes, document summarisation.
+      See the Agent Library's *Release Notes Generator* (deterministic) and *Invoice Extraction Agent* (workflow).
+    - **Agents:** bug triage where evidence needs vary, research assistants, coding agents, incident investigation with
+      read-only tools. See the *Bug Triage Agent*: it chooses tools but every write needs human approval.
+    - Many production "agents" are really workflows with one agentic step inside.
+  common_mistakes:
+    - mistake: Building an agent for a task with known steps.
+      fix: Write the steps as code; use the model only where judgement is needed.
+    - mistake: Agents without budgets or stop conditions.
+      fix: Cap steps, tokens and wall-clock time; define terminal actions; handle "no tool call" replies.
+    - mistake: Giving agents write tools directly.
+      fix: Keep tools read-only by default and route side effects through human approval.
+  debugging: |
+    - For workflows: log the input/output of each step; failures are local and reproducible.
+    - For agents: store the full trace (every tool call, arguments, result and model reply). Replay traces with a mock model
+      to reproduce failures deterministically.
+    - Track agent metrics: steps per task, tool error rate, loops (same tool + same args twice), budget exhaustion rate.
+  performance_security: |
+    - Agents re-send the growing conversation each step, so cost and latency grow faster than linearly with steps.
+    - Every tool the model can call is attack surface for prompt injection via tool results. Least privilege applies to agents
+      exactly as it does to service accounts.
+  interview_questions:
+    - q: When would you choose an agent over a workflow?
+      a: When the sequence of steps can't be determined in advance and varies per input, the tools are safe to call autonomously (or gated by approval), and evaluation shows a workflow can't reach the required quality.
+    - q: What controls would you put around a production agent?
+      a: Tool allowlists with validated arguments, read-only defaults, human approval for side effects, step/token/time budgets, tracing, evaluation sets and monitoring for loops and failures.
+  mini_challenge:
+    title: Pick the right level
+    prompt: For a set of product requirements, choose deterministic code, single call, workflow or agent in the linked exercise.
+    exercise: choose-architecture-level
+  advanced_challenge:
+    title: Workflow vs agent bake-off
+    prompt: Implement the same support-triage task as a 3-step workflow and as a tool-calling agent with a mock model. Run both on 20 tickets and compare accuracy, number of model calls and worst-case latency. Write a one-page recommendation.
+  further_reading:
+    - {title: "Anthropic: Building effective agents", url: "https://www.anthropic.com/research/building-effective-agents"}
+    - {title: "LangGraph documentation", url: "https://langchain-ai.github.io/langgraph/"}
+  version_notes: The examples use a scripted stand-in for the model so they run offline; in the Agent Library you can run the same patterns with a real provider on Pro.
+quiz:
+  - prompt: What distinguishes an agent from a workflow?
+    options: [Agents use bigger models, In an agent the model decides the next step and when to stop, Workflows can't call tools, Agents are always multi-agent]
+    answer: 1
+    explanation: Control flow is the difference - code decides in workflows, the model decides in agents.
+  - prompt: Which is the safest default for agent tools?
+    options: [Full write access to speed things up, Read-only tools with approval for side effects, No validation so the model is flexible, Let the model write its own tools]
+    answer: 1
+    explanation: Least privilege plus human approval for consequential actions limits the blast radius of mistakes and injection.
+exercises:
+  - slug: choose-architecture-level
+    title: Choose the architecture level
+    kind: multiple_choice
+    category: architecture
+    difficulty: intermediate
+    language: null
+    points: 15
+    prompt_md: |
+      A finance team wants monthly SLA reports: uptime percentages per service computed from monitoring data,
+      plus a short paragraph summarising the month for executives.
+
+      What's the most appropriate design?
+    options:
+      - "An autonomous agent with tools to query monitoring and write the report"
+      - "Deterministic code computes all numbers; one model call writes the summary paragraph from those numbers"
+      - "A single model call given the raw monitoring export, asked to compute uptime and write the report"
+      - "A multi-agent system with a calculator agent and a writer agent"
+    correct_index: 1
+    hints:
+      - Which part needs exact arithmetic, and which part needs language?
+    explanation_md: |
+      Uptime math must be exact and auditable - that's code, not a model. The only language task is the summary, which is a
+      single constrained model call grounded in the computed numbers. Agents or multi-agent systems add cost and risk
+      without adding capability here.

@@ -1,0 +1,217 @@
+slug: tokens-context-windows
+title: Tokens, context windows and cost
+summary: Learn how text becomes tokens, why context windows fill up faster than you expect, and how to estimate cost and latency.
+minutes: 25
+level: beginner
+tier: free
+tags: [llm, tokens, cost, generative-ai]
+prerequisites: []
+sections:
+  explanation: |
+    Language models don't read characters or words - they read **tokens**: frequent chunks of text produced by a
+    tokenizer such as **BPE** (byte-pair encoding). Common words are often one token (`" the"`), rare words split into
+    several (`" tokenization"` → `" token" + "ization"`), and code, numbers and non-English text often use more tokens per character.
+
+    The **context window** is the maximum number of tokens the model can attend to in one request: system prompt +
+    conversation history + retrieved documents + tool definitions + the model's own output. Exceed it and the request fails
+    or older content must be dropped.
+
+    Providers bill per token, usually with different prices for **input** and **output** tokens. Latency grows with
+    output length (tokens are generated one at a time) and, to a lesser degree, with input length.
+  why_it_matters: |
+    Every design decision in an LLM feature - how much history to keep, how many documents to retrieve, whether to
+    cache prompts, which model to use - is a token budget decision. Teams that don't measure tokens get surprise bills
+    and slow responses.
+  prerequisites:
+    - Basic Python
+    - What an API request is
+  mental_model: |
+    Think of the context window as a **whiteboard of fixed size**. Your instructions, the chat history, pasted documents
+    and the model's answer all have to fit on it. Tokens are the **cells** on the whiteboard: short common words take one
+    cell, rare words take several. Every cell written costs money, and the model writes its answer one cell at a time.
+  architecture:
+    caption: What fills a context window in a typical RAG chat request.
+    mermaid: |
+      flowchart LR
+        S[System prompt ~500] --> W[(Context window)]
+        T[Tool schemas ~800] --> W
+        H[Chat history ~3,000] --> W
+        R[Retrieved passages ~2,500] --> W
+        Q[User question ~50] --> W
+        W --> O[Model output ≤ max_tokens]
+  code_examples:
+    - title: A toy BPE tokenizer - learn merges from a corpus
+      language: python
+      runnable: true
+      code: |
+        from collections import Counter
+
+        corpus = ["low", "lower", "lowest", "newer", "wider", "new"]
+        words = [list(w) + ["</w>"] for w in corpus]       # start from characters
+
+        def most_frequent_pair(words):
+            pairs = Counter()
+            for w in words:
+                pairs.update(zip(w, w[1:]))
+            return pairs.most_common(1)[0][0]
+
+        def merge(words, pair):
+            out = []
+            for w in words:
+                merged, i = [], 0
+                while i < len(w):
+                    if i + 1 < len(w) and (w[i], w[i + 1]) == pair:
+                        merged.append(w[i] + w[i + 1]); i += 2
+                    else:
+                        merged.append(w[i]); i += 1
+                out.append(merged)
+            return out
+
+        for step in range(4):
+            pair = most_frequent_pair(words)
+            words = merge(words, pair)
+            print(f"merge {step + 1}: {pair[0]}+{pair[1]}")
+
+        print(words[1], "->", len(words[1]), "tokens for 'lower'")
+      annotations:
+        - "BPE repeatedly merges the most frequent adjacent pair into a new token."
+        - "Frequent fragments ('low', 'er') become single tokens; rare words stay split."
+      expected_output: |
+        merge 1: l+o
+        merge 2: lo+w
+        merge 3: e+r
+        merge 4: er+</w>
+        ['low', 'er</w>'] -> 2 tokens for 'lower'
+    - title: Estimate cost and check the context budget
+      language: python
+      runnable: true
+      code: |
+        def estimate_tokens(text: str) -> int:
+            return max(1, round(len(text) / 4))   # ~4 chars/token for English; use the real tokenizer in production
+
+        PRICE = {"input_per_mtok": 3.00, "output_per_mtok": 15.00}   # illustrative prices, not a real model's
+        CONTEXT_WINDOW = 8_000
+
+        system = "You are a support assistant. " * 20
+        history = "user: question...\nassistant: answer...\n" * 120
+        retrieved = "Policy text " * 600
+        question = "How many PTO days carry over?"
+        max_output = 500
+
+        parts = {"system": system, "history": history, "retrieved": retrieved, "question": question}
+        used = {k: estimate_tokens(v) for k, v in parts.items()}
+        total_in = sum(used.values())
+        print(used)
+        print("input tokens:", total_in, "| fits:", total_in + max_output <= CONTEXT_WINDOW)
+
+        cost = total_in / 1e6 * PRICE["input_per_mtok"] + max_output / 1e6 * PRICE["output_per_mtok"]
+        print(f"worst-case cost per request: ${cost:.4f}")
+        print(f"per 100k requests/day: ${cost * 100_000:,.0f}")
+      annotations:
+        - "History is the silent budget killer: it grows every turn."
+        - "Multiply per-request cost by volume before choosing a model."
+      expected_output: |
+        {'system': 145, 'history': 1170, 'retrieved': 1800, 'question': 7}
+        input tokens: 3122 | fits: True
+        worst-case cost per request: $0.0169
+        per 100k requests/day: $1,687
+    - title: Trim history to fit a budget (keep the newest turns)
+      language: python
+      runnable: true
+      code: |
+        def trim_history(turns: list[str], budget_tokens: int) -> list[str]:
+            kept, used = [], 0
+            for turn in reversed(turns):                 # newest first
+                cost = max(1, round(len(turn) / 4))
+                if used + cost > budget_tokens:
+                    break
+                kept.append(turn)
+                used += cost
+            return list(reversed(kept))                  # restore chronological order
+
+        turns = [f"turn {i}: " + "x" * 36 for i in range(1, 11)]   # each ~11 tokens
+        print(trim_history(turns, budget_tokens=35))
+      annotations:
+        - "Real systems often keep the system prompt + a summary of old turns + the newest turns."
+      expected_output: |
+        ['turn 8: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'turn 9: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'turn 10: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']
+  real_world: |
+    - **Chat products** summarise or truncate history once it passes a token threshold.
+    - **RAG systems** cap retrieved context (top-k × chunk size) to stay within budget and keep latency predictable.
+    - **Prompt caching** (offered by several providers) makes a long, repeated prefix such as a system prompt or tool
+      definitions much cheaper on repeat requests - put stable content first.
+    - **Cost dashboards** log input/output tokens per feature and per tenant so product teams can see unit economics.
+  common_mistakes:
+    - mistake: Estimating tokens with word counts for code or non-English text.
+      fix: Use the provider's tokenizer or token-counting endpoint; ratios vary a lot by language and content type.
+    - mistake: Forgetting that output tokens count against the context window and usually cost more.
+      fix: Set max_tokens deliberately and budget input + output together.
+    - mistake: Sending the full conversation forever.
+      fix: Summarise, truncate or retrieve relevant past turns instead.
+  debugging: |
+    - Log `usage` (input/output tokens) returned by every API call, tagged by feature and prompt version.
+    - When a request fails with a context-length error, print a per-part token breakdown like the example above.
+    - If costs spike, diff token usage per prompt version - a template change often silently doubles input size.
+  performance_security: |
+    - Output tokens dominate latency; ask for concise formats (JSON fields, bullet limits) when you don't need prose.
+    - Large contexts increase cost *and* the surface for prompt injection: everything in the window can influence the model.
+    - Never put secrets in prompts - they are sent to the provider and can be echoed back.
+  interview_questions:
+    - q: Why do LLM APIs price input and output tokens differently?
+      a: Input tokens are processed in parallel in one forward pass (prefill), while output tokens are generated sequentially, one forward pass each, which is more expensive per token.
+    - q: How would you keep a long-running chat within the context window?
+      a: Budget tokens per part; keep the system prompt, summarise older turns, keep recent turns verbatim, and retrieve relevant older messages when needed.
+    - q: How would you estimate monthly LLM cost for a feature?
+      a: Measure average input/output tokens per request from logs, multiply by per-token prices and expected request volume, and add headroom for retries and growth.
+  mini_challenge:
+    title: Budget calculator
+    prompt: Implement `fits(parts, window, max_output)` in the linked exercise using the 4-characters-per-token heuristic.
+    exercise: token-budget-fits
+  advanced_challenge:
+    title: Measure real tokenizers
+    prompt: Using an open-source tokenizer library on your machine, compare token counts for the same paragraph in English, Hindi and Python code. Write up what this means for pricing multilingual products.
+  further_reading:
+    - {title: "Hugging Face: Summary of the tokenizers", url: "https://huggingface.co/docs/transformers/tokenizer_summary"}
+    - {title: "Neural Machine Translation of Rare Words with Subword Units (BPE paper)", url: "https://arxiv.org/abs/1508.07909"}
+  version_notes: Prices and context window sizes change frequently and differ per model - always check your provider's current pricing page. The numbers in examples are illustrative.
+quiz:
+  - prompt: Which parts of a request count toward the context window?
+    options: [Only the user message, System prompt and user message, Everything sent plus the generated output, Only the output]
+    answer: 2
+    explanation: System prompt, history, documents, tool definitions and the generated output all share the window.
+  - prompt: Your bill doubled after a prompt change. What do you check first?
+    options: [The model's temperature, Logged input/output token counts per prompt version, The network latency, The database]
+    answer: 1
+    explanation: Token usage per version shows whether the template grew or outputs got longer.
+exercises:
+  - slug: token-budget-fits
+    title: Does the request fit?
+    kind: code
+    category: coding
+    difficulty: beginner
+    language: python
+    points: 10
+    prompt_md: |
+      Implement `fits(parts, window, max_output)`.
+
+      - `parts` is a dict of name → text. Each part costs `max(1, round(len(text) / 4))` tokens.
+      - Return `[total_input_tokens, True/False]` where the boolean says whether `total_input_tokens + max_output <= window`.
+    starter_code: |
+      def fits(parts, window, max_output):
+          # your code here
+          return [0, False]
+    tests:
+      function: fits
+      cases:
+        - {args: [{"a": "abcd", "b": "abcdefgh"}, 10, 7], expected: [3, true]}
+        - {args: [{"a": ""}, 1, 0], expected: [1, true]}
+        - {args: [{"a": ""}, 0, 0], expected: [1, false]}
+        - {args: [{"doc": "abcdefghijklmnopqrstuvwxyz"}, 10, 4], expected: [6, true], hidden: true}
+        - {args: [{"doc": "abcdefghijklmnopqrstuvwxyz"}, 9, 4], expected: [6, false], hidden: true}
+    hints:
+      - Sum the per-part estimates first; empty strings still cost 1 token.
+    solution: |
+      def fits(parts, window, max_output):
+          total = sum(max(1, round(len(text) / 4)) for text in parts.values())
+          return [total, total + max_output <= window]
+    explanation_md: Budgeting per part (rather than one big string) is what lets you decide *which* part to trim.

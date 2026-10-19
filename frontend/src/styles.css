@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/instrument-sans";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant light (&:where([data-theme=light], [data-theme=light] *));
+
+/* Dark-first tokens. Signal hues mirror trace span kinds: step / llm / tool / pass. */
+:root {
+  --bg: #0e1420;
+  --bg-sunken: #0a0f19;
+  --panel: #151c2b;
+  --panel-2: #1b2436;
+  --line: #263045;
+  --line-strong: #34405a;
+  --fg: #e6eaf2;
+  --fg-muted: #8c96ab;
+  --fg-faint: #5d6880;
+  --signal: #7aa2ff;
+  --signal-fg: #0b1222;
+  --llm: #b79cff;
+  --tool: #f2b95c;
+  --pass: #5fd3a6;
+  --fail: #ff7a85;
+  --focus: #9db9ff;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f5f7fb;
+  --bg-sunken: #eceff5;
+  --panel: #ffffff;
+  --panel-2: #f3f5f9;
+  --line: #dfe4ee;
+  --line-strong: #c8d0de;
+  --fg: #121826;
+  --fg-muted: #4f5a70;
+  --fg-faint: #7a8499;
+  --signal: #3358d4;
+  --signal-fg: #ffffff;
+  --llm: #7a52e0;
+  --tool: #b7791f;
+  --pass: #1f9d6f;
+  --fail: #d4364a;
+  --focus: #3358d4;
+  color-scheme: light;
+}
+
+@theme inline {
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Instrument Sans Variable", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-bg: var(--bg);
+  --color-sunken: var(--bg-sunken);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-faint: var(--fg-faint);
+  --color-signal: var(--signal);
+  --color-signal-fg: var(--signal-fg);
+  --color-llm: var(--llm);
+  --color-tool: var(--tool);
+  --color-pass: var(--pass);
+  --color-fail: var(--fail);
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, .font-display { font-family: var(--font-display); font-optical-sizing: auto; letter-spacing: -0.015em; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+::selection { background: color-mix(in oklab, var(--signal) 35%, transparent); }
+
+/* Long-form lesson prose */
+.prose-af { max-width: 70ch; color: var(--fg); }
+.prose-af p { margin: 0 0 0.9em; }
+.prose-af ul, .prose-af ol { margin: 0 0 1em; padding-left: 1.3em; }
+.prose-af ul { list-style: disc; }
+.prose-af ol { list-style: decimal; }
+.prose-af li { margin: 0.25em 0; }
+.prose-af li::marker { color: var(--fg-faint); }
+.prose-af strong { font-weight: 620; color: var(--fg); }
+.prose-af a { color: var(--signal); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.prose-af :not(pre) > code {
+  font-family: var(--font-mono); font-size: 0.86em; padding: 0.1em 0.35em; border-radius: 5px;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.prose-af blockquote { border-left: 3px solid var(--line-strong); padding-left: 1em; color: var(--fg-muted); margin: 0 0 1em; }
+.prose-af table { border-collapse: collapse; margin: 0 0 1em; font-size: 0.93em; }
+.prose-af th, .prose-af td { border: 1px solid var(--line); padding: 0.4em 0.7em; text-align: left; }
+.prose-af h3 { font-size: 1.1rem; font-weight: 650; margin: 1.2em 0 0.4em; }
+
+/* Trace replay in the hero: bars grow once, in sequence */
+@keyframes span-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.span-bar { transform-origin: left center; animation: span-grow 520ms cubic-bezier(.2,.7,.2,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .span-bar { animation: none; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }

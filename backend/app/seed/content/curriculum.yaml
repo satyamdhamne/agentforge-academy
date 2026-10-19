@@ -1,0 +1,377 @@
+# Track > Course > Module > Lesson outline for all 16 tracks.
+# A lesson is published when a matching file exists in lessons/<slug>.yaml; otherwise it is shown as "coming soon".
+tracks:
+  - slug: cs-fundamentals
+    title: Computer Science Fundamentals
+    summary: How computers, networks and the web actually work - the base every engineer builds on.
+    icon: cpu
+    color: slate
+    level: beginner
+    outcomes: [Explain what happens during an HTTP request, Pick the right data structure, Use Git and Linux confidently]
+    courses:
+      - slug: how-the-web-works
+        title: How the Web Works
+        level: beginner
+        hours: 4
+        modules:
+          - slug: networking-basics
+            title: Networking Basics
+            lessons:
+              - {slug: http-request-lifecycle, title: "The life of an HTTP request"}
+              - {slug: dns-explained, title: "DNS: from names to addresses"}
+              - {slug: tcp-tls-basics, title: "TCP and TLS in practice"}
+      - slug: data-structures-algorithms
+        title: Data Structures & Algorithms
+        level: beginner
+        hours: 8
+        modules:
+          - slug: core-structures
+            title: Core Structures
+            lessons:
+              - {slug: big-o-intuition, title: "Big-O intuition with real examples"}
+              - {slug: hash-maps-in-practice, title: "Hash maps in practice"}
+          - slug: tools-of-the-trade
+            title: Tools of the Trade
+            lessons:
+              - {slug: git-mental-model, title: "Git's mental model: snapshots, not diffs"}
+              - {slug: linux-shell-essentials, title: "Linux shell essentials"}
+
+  - slug: javascript-typescript
+    title: JavaScript & TypeScript
+    summary: From closures and the event loop to generics and type-safe APIs.
+    icon: braces
+    color: amber
+    level: beginner
+    outcomes: [Reason about closures and scope, Predict async execution order, Model APIs with TypeScript generics]
+    courses:
+      - slug: javascript-core
+        title: JavaScript Core
+        level: beginner
+        hours: 6
+        modules:
+          - slug: functions-and-scope
+            title: Functions & Scope
+            lessons:
+              - {slug: js-closures, title: "Closures: functions that remember"}
+              - {slug: js-prototypes, title: "Prototypes and classes"}
+          - slug: async-javascript
+            title: Async JavaScript
+            lessons:
+              - {slug: js-event-loop, title: "The event loop, microtasks and timers"}
+              - {slug: js-promises-async-await, title: "Promises and async/await patterns"}
+      - slug: typescript-essentials
+        title: TypeScript Essentials
+        level: intermediate
+        hours: 6
+        modules:
+          - slug: types-for-real-apps
+            title: Types for Real Apps
+            lessons:
+              - {slug: ts-generics, title: "Generics without the fear"}
+              - {slug: ts-utility-types, title: "Utility types for API models"}
+
+  - slug: react
+    title: React
+    summary: Components, hooks, data fetching, performance and accessibility for production UIs.
+    icon: atom
+    color: sky
+    level: intermediate
+    outcomes: [Build components with predictable state, Fetch and cache server data, Ship accessible, tested UIs]
+    courses:
+      - slug: react-foundations
+        title: React Foundations
+        level: beginner
+        hours: 8
+        modules:
+          - slug: thinking-in-react
+            title: Thinking in React
+            lessons:
+              - {slug: react-components-props, title: "Components and props"}
+              - {slug: react-state-effects, title: "State, effects and when not to use them"}
+          - slug: server-state
+            title: Server State
+            lessons:
+              - {slug: react-tanstack-query, title: "Server state with TanStack Query"}
+
+  - slug: angular
+    title: Angular
+    summary: Standalone components, signals, RxJS and enterprise architecture.
+    icon: shield
+    color: rose
+    level: intermediate
+    outcomes: [Structure Angular apps with standalone APIs, Manage state with signals and RxJS]
+    courses:
+      - slug: angular-modern
+        title: Modern Angular
+        level: intermediate
+        hours: 8
+        modules:
+          - slug: angular-core
+            title: Angular Core
+            lessons:
+              - {slug: angular-standalone-components, title: "Standalone components and DI"}
+              - {slug: angular-signals, title: "Signals vs RxJS: choosing reactivity"}
+
+  - slug: nodejs
+    title: Node.js
+    summary: Build APIs, workers and real-time services with Node.js.
+    icon: server
+    color: green
+    level: intermediate
+    outcomes: [Design REST APIs with middleware, Use streams, queues and workers]
+    courses:
+      - slug: node-apis
+        title: Building APIs with Node.js
+        level: intermediate
+        hours: 8
+        modules:
+          - slug: express-nest
+            title: Express & NestJS
+            lessons:
+              - {slug: node-middleware, title: "Middleware pipelines"}
+              - {slug: node-auth-jwt, title: "Sessions vs JWTs"}
+              - {slug: node-streams, title: "Streams and backpressure"}
+
+  - slug: python
+    title: Python
+    summary: Idiomatic Python from comprehensions to asyncio, typing and packaging.
+    icon: code
+    color: blue
+    level: beginner
+    outcomes: [Write idiomatic, typed Python, Use generators and asyncio effectively]
+    courses:
+      - slug: python-idioms
+        title: Python Idioms
+        level: beginner
+        hours: 6
+        modules:
+          - slug: iteration
+            title: Iteration
+            lessons:
+              - {slug: python-generators, title: "Generators and lazy pipelines"}
+              - {slug: python-decorators, title: "Decorators demystified"}
+          - slug: modern-python
+            title: Modern Python
+            lessons:
+              - {slug: python-asyncio, title: "asyncio for I/O-bound work"}
+              - {slug: python-typing-pydantic, title: "Type hints and Pydantic"}
+
+  - slug: fastapi
+    title: FastAPI
+    summary: Production APIs with validation, dependency injection, auth and background work.
+    icon: zap
+    color: teal
+    level: intermediate
+    outcomes: [Structure FastAPI apps with dependencies, Secure endpoints, Deploy to production]
+    courses:
+      - slug: fastapi-core
+        title: FastAPI Core
+        level: intermediate
+        hours: 6
+        modules:
+          - slug: request-handling
+            title: Request Handling
+            lessons:
+              - {slug: fastapi-dependency-injection, title: "Dependency injection in FastAPI"}
+              - {slug: fastapi-validation, title: "Validation and error envelopes"}
+              - {slug: fastapi-background-tasks, title: "Background tasks vs real queues"}
+
+  - slug: databases
+    title: Databases
+    summary: SQL, indexing, transactions and scaling with PostgreSQL, MySQL, MongoDB and Redis.
+    icon: database
+    color: indigo
+    level: intermediate
+    outcomes: [Read query plans and add the right index, Use transactions correctly, Choose between SQL and NoSQL]
+    courses:
+      - slug: sql-performance
+        title: SQL Performance
+        level: intermediate
+        hours: 6
+        modules:
+          - slug: indexing
+            title: Indexing
+            lessons:
+              - {slug: sql-indexes-query-plans, title: "Indexes and query plans"}
+              - {slug: sql-transactions-acid, title: "Transactions and isolation levels"}
+          - slug: beyond-sql
+            title: Beyond SQL
+            lessons:
+              - {slug: redis-caching-patterns, title: "Redis caching patterns"}
+              - {slug: mongodb-modeling, title: "Document modeling in MongoDB"}
+
+  - slug: aws-devops
+    title: AWS & DevOps
+    summary: Deploy, secure and operate systems on AWS with Docker, CI/CD and Terraform.
+    icon: cloud
+    color: orange
+    level: intermediate
+    outcomes: [Write least-privilege IAM policies, Containerise and deploy services, Automate with CI/CD and Terraform]
+    courses:
+      - slug: aws-foundations
+        title: AWS Foundations
+        level: intermediate
+        hours: 8
+        modules:
+          - slug: security-first
+            title: Security First
+            lessons:
+              - {slug: iam-least-privilege, title: "IAM and least privilege", tier: pro}
+              - {slug: vpc-networking, title: "VPC networking essentials"}
+          - slug: shipping
+            title: Shipping
+            lessons:
+              - {slug: docker-for-developers, title: "Docker for developers"}
+              - {slug: github-actions-ci, title: "CI with GitHub Actions"}
+
+  - slug: generative-ai
+    title: Generative AI
+    summary: Tokens, embeddings, sampling, structured outputs and tool calling - how LLMs really behave.
+    icon: sparkles
+    color: violet
+    level: beginner
+    outcomes: [Estimate tokens, cost and latency, Use embeddings for similarity, Get reliable structured outputs]
+    courses:
+      - slug: llm-foundations
+        title: LLM Foundations
+        level: beginner
+        hours: 6
+        modules:
+          - slug: how-llms-see-text
+            title: How LLMs See Text
+            lessons:
+              - {slug: tokens-context-windows, title: "Tokens, context windows and cost"}
+              - {slug: embeddings-similarity, title: "Embeddings and similarity search"}
+          - slug: reliable-outputs
+            title: Reliable Outputs
+            lessons:
+              - {slug: structured-outputs, title: "Structured outputs with JSON schema"}
+              - {slug: sampling-temperature, title: "Sampling, temperature and determinism"}
+
+  - slug: rag-engineering
+    title: RAG Engineering
+    summary: Ingestion, chunking, retrieval, reranking, citations, permissions and evaluation.
+    icon: library
+    color: emerald
+    level: intermediate
+    outcomes: [Design a chunking strategy, Build permission-aware retrieval, Evaluate retrieval and answers separately]
+    courses:
+      - slug: rag-core
+        title: RAG Core
+        level: intermediate
+        hours: 8
+        modules:
+          - slug: ingestion
+            title: Ingestion
+            lessons:
+              - {slug: rag-chunking-strategies, title: "Chunking strategies that work"}
+              - {slug: rag-hybrid-search, title: "Hybrid search and reranking"}
+          - slug: trustworthy-rag
+            title: Trustworthy RAG
+            lessons:
+              - {slug: rag-permissions, title: "Permissions and tenant isolation"}
+              - {slug: rag-evaluation, title: "Evaluating retrieval and answers"}
+
+  - slug: agentic-ai
+    title: Agentic AI
+    summary: Workflows vs agents, tool calling, state, approvals, LangGraph and multi-agent systems.
+    icon: bot
+    color: fuchsia
+    level: intermediate
+    outcomes: [Decide when an agent is warranted, Build safe tool-calling loops, Add approvals, budgets and evaluation]
+    courses:
+      - slug: agent-foundations
+        title: Agent Foundations
+        level: intermediate
+        hours: 8
+        modules:
+          - slug: deciding
+            title: Deciding
+            lessons:
+              - {slug: workflows-vs-agents, title: "Workflows vs agents"}
+              - {slug: tool-calling-safely, title: "Tool calling, safely"}
+          - slug: production-agents
+            title: Production Agents
+            lessons:
+              - {slug: langgraph-state-checkpoints, title: "LangGraph state and checkpoints"}
+              - {slug: human-in-the-loop, title: "Human-in-the-loop approvals"}
+              - {slug: mcp-overview, title: "Model Context Protocol (MCP) overview"}
+
+  - slug: llm-slm-engineering
+    title: LLM & SLM Engineering
+    summary: Model selection, local inference, quantization, fine-tuning and serving on a budget.
+    icon: gauge
+    color: cyan
+    level: advanced
+    outcomes: [Choose models by quality, privacy, latency and cost, Understand quantization and LoRA trade-offs]
+    courses:
+      - slug: model-selection
+        title: Model Selection & Serving
+        level: advanced
+        hours: 8
+        modules:
+          - slug: choosing-models
+            title: Choosing Models
+            lessons:
+              - {slug: model-selection-tradeoffs, title: "Model selection trade-offs"}
+              - {slug: quantization-basics, title: "Quantization basics"}
+              - {slug: lora-fine-tuning, title: "LoRA and QLoRA fine-tuning"}
+
+  - slug: system-design
+    title: System Design
+    summary: Caching, queues, consistency, reliability and AI-specific system design.
+    icon: network
+    color: lime
+    level: advanced
+    outcomes: [Design idempotent, reliable APIs, Reason about consistency and scaling trade-offs]
+    courses:
+      - slug: reliability-patterns
+        title: Reliability Patterns
+        level: intermediate
+        hours: 6
+        modules:
+          - slug: correctness-under-failure
+            title: Correctness Under Failure
+            lessons:
+              - {slug: idempotency-keys, title: "Idempotency keys and safe retries", tier: pro}
+              - {slug: rate-limiting, title: "Rate limiting algorithms"}
+              - {slug: queues-and-backpressure, title: "Queues and backpressure"}
+
+  - slug: ai-security
+    title: AI Security & Governance
+    summary: Prompt injection, data exfiltration, least privilege for agents, PII and governance.
+    icon: lock
+    color: red
+    level: intermediate
+    outcomes: [Recognise and mitigate prompt injection, Apply least privilege to AI tools, Handle PII responsibly]
+    courses:
+      - slug: securing-llm-apps
+        title: Securing LLM Applications
+        level: intermediate
+        hours: 5
+        modules:
+          - slug: threats
+            title: Threats
+            lessons:
+              - {slug: prompt-injection-defense, title: "Prompt injection: threats and defenses"}
+              - {slug: pii-handling-ai, title: "PII handling in AI systems"}
+              - {slug: tenant-isolation, title: "Tenant isolation for AI features"}
+
+  - slug: ai-interviews
+    title: AI Engineering Interviews
+    summary: Theory, coding, system design and behavioral preparation with transparent rubrics.
+    icon: mic
+    color: yellow
+    level: intermediate
+    outcomes: [Structure answers to AI system design questions, Practise with rubric-based feedback]
+    courses:
+      - slug: interview-prep
+        title: Interview Preparation
+        level: intermediate
+        hours: 6
+        modules:
+          - slug: system-design-interviews
+            title: System Design Interviews
+            lessons:
+              - {slug: ai-system-design-framework, title: "A framework for AI system design interviews"}
+              - {slug: behavioral-star, title: "Behavioral answers with STAR"}

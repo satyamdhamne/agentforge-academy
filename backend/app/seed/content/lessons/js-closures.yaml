@@ -1,0 +1,211 @@
+slug: js-closures
+title: "Closures: functions that remember"
+summary: Understand how inner functions capture variables, why loops with var surprise people, and how closures power React hooks and middleware.
+minutes: 20
+level: beginner
+tier: free
+tags: [javascript, functions, scope]
+prerequisites: []
+sections:
+  explanation: |
+    A **closure** is a function bundled with the variables that were in scope where it was *created*.
+    When an inner function references a variable from an outer function, it keeps access to that variable
+    even after the outer function has returned.
+
+    ```js
+    function makeCounter() {
+      let count = 0;               // lives on after makeCounter returns
+      return () => ++count;        // the arrow function closes over `count`
+    }
+    ```
+
+    Each call to `makeCounter()` creates a *new* `count`, so two counters never interfere.
+    Closures capture **variables (bindings), not values**: if the variable changes later, the closure sees the new value.
+  why_it_matters: |
+    Closures are everywhere in JavaScript: event handlers, callbacks, module patterns, memoisation, Express middleware
+    factories and React hooks. Most "stale state" bugs in React and most "why does every button log 3?" bugs are closure bugs.
+  prerequisites:
+    - Declaring functions and arrow functions
+    - The difference between let, const and var
+  mental_model: |
+    Picture every function call creating a small **backpack** of its local variables. When a function returns an inner
+    function, the inner function walks away *wearing the backpack*. Anyone holding that inner function can reach into
+    the same backpack later - and every inner function created in the same call shares the same backpack.
+  architecture: null
+  code_examples:
+    - title: Private state with a closure
+      language: javascript
+      runnable: true
+      code: |
+        function makeCounter(start = 0) {
+          let count = start;
+          return {
+            increment: () => ++count,
+            reset: () => { count = start; },
+            get value() { return count; },
+          };
+        }
+
+        const a = makeCounter();
+        const b = makeCounter(10);
+        a.increment(); a.increment(); b.increment();
+        console.log(a.value, b.value); // independent backpacks
+        a.reset();
+        console.log(a.value);
+      annotations:
+        - "`count` is not reachable from outside - only through the returned functions."
+        - "Each makeCounter() call creates a fresh `count`."
+      expected_output: |
+        2 11
+        0
+    - title: The classic loop bug - var vs let
+      language: javascript
+      runnable: true
+      code: |
+        const withVar = [];
+        for (var i = 0; i < 3; i++) withVar.push(() => i);
+
+        const withLet = [];
+        for (let j = 0; j < 3; j++) withLet.push(() => j);
+
+        console.log(withVar.map((f) => f())); // one shared `i`
+        console.log(withLet.map((f) => f())); // a new `j` per iteration
+      annotations:
+        - "`var` is function-scoped: all three closures share one `i`, which is 3 when they run."
+        - "`let` creates a new binding per loop iteration."
+      expected_output: |
+        [3,3,3]
+        [0,1,2]
+    - title: A middleware factory (how Express-style APIs use closures)
+      language: javascript
+      runnable: true
+      code: |
+        function rateLimit(maxRequests) {
+          const hits = new Map(); // captured: shared by every call of the returned middleware
+          return function check(ip) {
+            const n = (hits.get(ip) || 0) + 1;
+            hits.set(ip, n);
+            return n <= maxRequests ? "allowed" : "blocked";
+          };
+        }
+
+        const limiter = rateLimit(2);
+        console.log(["1.1.1.1", "1.1.1.1", "1.1.1.1", "2.2.2.2"].map(limiter).join(", "));
+      annotations:
+        - "Configuration (`maxRequests`) and state (`hits`) live in the closure, not in globals."
+      expected_output: |
+        allowed, allowed, blocked, allowed
+  real_world: |
+    - **React hooks:** an effect or event handler sees the state value from the render that created it - a closure.
+      Missing dependencies in `useEffect` produce "stale closures".
+    - **Express/Koa middleware factories:** `app.use(cors({ origin }))` returns a closure over its options.
+    - **Memoisation:** `memoize(fn)` returns a function that closes over a cache.
+  common_mistakes:
+    - mistake: Using `var` in loops that create callbacks.
+      fix: Use `let`/`const`, which create a fresh binding per iteration.
+    - mistake: Stale state in React effects or intervals.
+      fix: Include dependencies, use functional updates (`setCount(c => c + 1)`), or keep mutable values in a ref.
+    - mistake: Accidentally keeping large objects alive.
+      fix: Closures retain everything they reference; avoid capturing big data in long-lived callbacks.
+  debugging: |
+    In Chrome DevTools, pause inside the inner function: the **Scope** panel shows a "Closure" section listing exactly
+    which captured variables it can see and their current values. Log the variable *inside* the callback, at the moment
+    it runs, not where you created it.
+  performance_security: |
+    - Closures are cheap, but long-lived closures (event listeners, timers, caches) keep their captured objects in memory -
+      a common source of leaks in single-page apps. Remove listeners and clear timers.
+    - Closures give real privacy for state, which is useful for hiding tokens from other modules - but anything in
+      browser memory is still reachable by injected scripts, so closures are not a security boundary against XSS.
+  interview_questions:
+    - q: What is a closure?
+      a: A function together with references to the variables from the scope where it was created, which it can still access after that scope has finished executing.
+    - q: Why does `for (var i...) setTimeout(() => console.log(i))` print the same number?
+      a: "`var` creates one function-scoped binding shared by every callback; by the time the callbacks run the loop has finished and `i` holds its final value. `let` creates a new binding per iteration."
+    - q: How do closures relate to React's stale state problems?
+      a: Each render creates new functions that close over that render's props and state. If an effect or interval keeps an old function, it keeps reading old values.
+  mini_challenge:
+    title: Write `once(fn)`
+    prompt: Implement a function that runs `fn` only on the first call and returns the first result on every later call.
+    exercise: js-once
+  advanced_challenge:
+    title: Memoize with a cache limit
+    prompt: Implement `memoize(fn, maxSize)` that caches results by JSON-serialised arguments and evicts the least recently used entry when full. Write tests for eviction order.
+  further_reading:
+    - {title: "MDN: Closures", url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Closures"}
+    - {title: "React docs: Removing Effect dependencies", url: "https://react.dev/learn/removing-effect-dependencies"}
+  version_notes: Works in all modern runtimes (ES2015+). `let`/`const` block scoping is what fixes the loop example.
+quiz:
+  - prompt: What does a closure capture?
+    options: [A copy of each variable's value at creation time, The variables (bindings) themselves, Only global variables, Nothing until it is called]
+    answer: 1
+    explanation: Closures capture bindings, so they observe later changes to those variables.
+  - prompt: Two counters created by two calls to `makeCounter()`...
+    options: [share one count, have independent counts, overwrite each other, throw an error]
+    answer: 1
+    explanation: Every call to the outer function creates a new scope with its own variables.
+exercises:
+  - slug: js-once
+    title: Implement once(fn)
+    kind: code
+    category: coding
+    difficulty: beginner
+    language: javascript
+    points: 10
+    prompt_md: |
+      Implement `callTwice(fn, a, b)` **using a helper** `once(fn)`:
+
+      - `once(fn)` returns a function that calls `fn` the first time and returns its result,
+        and on later calls returns that same first result without calling `fn` again.
+      - `callTwice(fnName, a, b)` is the test entry point: it builds `once` around a built-in
+        function chosen by name (`"add"` or `"concat"`), calls it with `a` then with `b`, and
+        returns `[firstResult, secondResult, timesCalled]`.
+
+      The `callTwice` wrapper is already written - you only implement `once`.
+    starter_code: |
+      function once(fn) {
+        // your code here
+      }
+
+      function callTwice(fnName, a, b) {
+        let calls = 0;
+        const impls = {
+          add: (x) => { calls++; return x + 1; },
+          concat: (x) => { calls++; return "v" + x; },
+        };
+        const wrapped = once(impls[fnName]);
+        return [wrapped(a), wrapped(b), calls];
+      }
+    tests:
+      function: callTwice
+      cases:
+        - {args: ["add", 1, 5], expected: [2, 2, 1]}
+        - {args: ["concat", "x", "y"], expected: ["vx", "vx", 1]}
+        - {args: ["add", 0, 0], expected: [1, 1, 1], hidden: true}
+    hints:
+      - Keep two variables in the closure - whether fn has run, and its result.
+      - Don't use `result === undefined` to detect "already called"; fn might return undefined.
+    solution: |
+      function once(fn) {
+        let called = false;
+        let result;
+        return function (...args) {
+          if (!called) {
+            called = true;
+            result = fn(...args);
+          }
+          return result;
+        };
+      }
+
+      function callTwice(fnName, a, b) {
+        let calls = 0;
+        const impls = {
+          add: (x) => { calls++; return x + 1; },
+          concat: (x) => { calls++; return "v" + x; },
+        };
+        const wrapped = once(impls[fnName]);
+        return [wrapped(a), wrapped(b), calls];
+      }
+    explanation_md: |
+      `called` and `result` live in the closure created by each `once()` call. A separate `called` flag is more robust
+      than checking the result, because `fn` may legitimately return `undefined`.

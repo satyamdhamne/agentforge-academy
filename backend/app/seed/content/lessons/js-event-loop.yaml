@@ -1,0 +1,178 @@
+slug: js-event-loop
+title: The event loop, microtasks and timers
+summary: Predict the exact order of synchronous code, promises and timers - and avoid blocking the loop in Node.js servers.
+minutes: 25
+level: intermediate
+tier: free
+tags: [javascript, async, nodejs, performance]
+prerequisites: [js-closures]
+sections:
+  explanation: |
+    JavaScript runs your code on **one thread** with a **call stack**. Asynchronous work (timers, network, file I/O)
+    is handled by the runtime, which queues callbacks when that work completes. The **event loop** repeatedly:
+
+    1. Runs the current synchronous code until the call stack is empty.
+    2. Drains the **microtask queue** completely (promise reactions, `queueMicrotask`, `await` continuations).
+    3. Takes **one macrotask** (a timer callback, an I/O callback, `setImmediate`) and runs it - then goes back to step 2.
+
+    That is why `Promise.resolve().then(...)` runs before `setTimeout(..., 0)`: microtasks always run before the next macrotask.
+  why_it_matters: |
+    Ordering bugs ("why is this undefined?"), UI freezes and slow Node.js APIs all come from misunderstanding the event loop.
+    A single CPU-heavy synchronous function blocks *every* request on a Node server.
+  prerequisites:
+    - Functions and callbacks
+    - Basic promises (`.then`)
+  mental_model: |
+    A chef (the single thread) cooks one dish at a time. Waiters bring orders (macrotasks) one by one.
+    Between orders, the chef first handles every **sticky note** on the counter (microtasks) - including sticky notes
+    added while handling other sticky notes - before taking the next order. If the chef spends 10 minutes on one dish,
+    every waiter waits.
+  architecture:
+    caption: One turn of the event loop.
+    mermaid: |
+      flowchart LR
+        S[Run synchronous code] --> M{Microtasks queued?}
+        M -->|yes| R[Run ALL microtasks] --> M
+        M -->|no| T[Take ONE macrotask: timer / I/O]
+        T --> S
+  code_examples:
+    - title: Predict the order
+      language: javascript
+      runnable: true
+      code: |
+        console.log("1 sync start");
+
+        setTimeout(() => console.log("6 timeout"), 0);
+
+        Promise.resolve()
+          .then(() => console.log("3 microtask A"))
+          .then(() => console.log("5 microtask C (queued by A)"));
+
+        queueMicrotask(() => console.log("4 microtask B"));
+
+        console.log("2 sync end");
+      annotations:
+        - "All synchronous logs run first."
+        - "Microtask A runs, which queues C at the END of the microtask queue (after B)."
+        - "The timer is a macrotask, so it waits until the microtask queue is empty."
+      expected_output: |
+        1 sync start
+        2 sync end
+        3 microtask A
+        4 microtask B
+        5 microtask C (queued by A)
+        6 timeout
+    - title: await is just a microtask continuation
+      language: javascript
+      runnable: true
+      code: |
+        async function work(label) {
+          console.log(label, "before await");
+          await null;                      // everything below is scheduled as a microtask
+          console.log(label, "after await");
+        }
+
+        work("A");
+        work("B");
+        console.log("sync done");
+      annotations:
+        - "Code before the first `await` runs synchronously."
+        - "Continuations of A and B run in the order they awaited."
+      expected_output: |
+        A before await
+        B before await
+        sync done
+        A after await
+        B after await
+    - title: Blocking the loop delays everything
+      language: javascript
+      runnable: true
+      code: |
+        const start = Date.now();
+        setTimeout(() => {
+          const late = Date.now() - start;
+          console.log(late >= 200 ? "timer delayed by blocking work" : "timer on time");
+        }, 10);
+
+        // Simulate a CPU-heavy request handler (e.g. hashing, big JSON.parse)
+        while (Date.now() - start < 200) { /* busy */ }
+        console.log("heavy work finished");
+      annotations:
+        - "The 10 ms timer cannot fire while synchronous code is running."
+        - "In a Node server this delay hits every concurrent request."
+      expected_output: |
+        heavy work finished
+        timer delayed by blocking work
+  real_world: |
+    - **Node.js APIs:** move CPU-heavy work (image processing, large crypto, PDF generation) to worker threads or a queue.
+    - **Frontend:** long tasks (>50 ms) make the UI janky; split work with `requestIdleCallback`/`scheduler.yield()` or Web Workers.
+    - **Streaming LLM responses:** each chunk is an I/O callback; slow synchronous processing per chunk stalls the stream.
+  common_mistakes:
+    - mistake: Assuming `setTimeout(fn, 0)` runs "immediately".
+      fix: It runs after the current task and all microtasks; the delay is a minimum, not a guarantee.
+    - mistake: Infinite microtask loops (a promise chain that keeps queueing itself).
+      fix: Microtasks are drained completely before timers or I/O, so a never-ending chain freezes everything. Yield with a macrotask.
+    - mistake: Using `forEach` with async callbacks and expecting it to wait.
+      fix: Use `for...of` with `await`, or `Promise.all` for parallel work.
+  debugging: |
+    - Node: run with `--trace-warnings`; measure loop lag with `perf_hooks.monitorEventLoopDelay()`.
+    - Browser: the Performance panel highlights **long tasks** in red.
+    - Add timestamps to logs (`performance.now()`) to see where time goes.
+  performance_security: |
+    A single synchronous regex with catastrophic backtracking (ReDoS) or a huge `JSON.parse` on untrusted input can block a
+    Node server for seconds - effectively a denial of service. Limit request body sizes, avoid user-controlled regexes,
+    and offload CPU work.
+  interview_questions:
+    - q: What is the difference between microtasks and macrotasks?
+      a: Microtasks (promise reactions, queueMicrotask) are drained completely after each task; macrotasks (timers, I/O, setImmediate) are processed one per loop iteration. So promise callbacks always run before the next timer.
+    - q: Why is Node.js good for I/O-heavy servers but bad for CPU-heavy ones?
+      a: The event loop handles thousands of concurrent waits cheaply, but CPU work runs on the single main thread and blocks all other requests unless moved to worker threads or other processes.
+  mini_challenge:
+    title: Order the outputs
+    prompt: Predict the output order of a snippet mixing timers, promises and await - then check yourself in the linked exercise.
+    exercise: event-loop-order-quiz
+  advanced_challenge:
+    title: Measure event-loop lag
+    prompt: Write a small Node.js script that reports p50/p99 event-loop delay with `monitorEventLoopDelay`, then show how a synchronous `crypto.pbkdf2Sync` call affects it versus the async `pbkdf2`.
+  further_reading:
+    - {title: "Node.js: The event loop, timers and process.nextTick()", url: "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"}
+    - {title: "MDN: Using microtasks", url: "https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide"}
+  version_notes: Node.js 18+ and all evergreen browsers. Node also has `process.nextTick`, which runs before promise microtasks.
+quiz:
+  - prompt: "Which runs first after synchronous code finishes: a resolved promise's .then callback or setTimeout(cb, 0)?"
+    options: [setTimeout, The .then callback, It is random, Whichever was registered first]
+    answer: 1
+    explanation: The microtask queue is drained before the next macrotask (the timer).
+  - prompt: A Node API handler computes a large report synchronously for 2 seconds. What happens to other requests?
+    options: [They run in parallel on other threads, They wait until the handler finishes, They are dropped, Nothing - Node is async]
+    answer: 1
+    explanation: JavaScript execution is single-threaded; blocking code delays every other callback.
+exercises:
+  - slug: event-loop-order-quiz
+    title: Predict the event-loop order
+    kind: multiple_choice
+    category: debugging
+    difficulty: intermediate
+    language: null
+    points: 10
+    prompt_md: |
+      What does this print?
+
+      ```js
+      setTimeout(() => console.log("T"), 0);
+      (async () => {
+        console.log("A");
+        await null;
+        console.log("B");
+      })();
+      Promise.resolve().then(() => console.log("P"));
+      console.log("S");
+      ```
+    options: ["A S B P T", "A S P B T", "S A B P T", "A B S P T"]
+    correct_index: 0
+    hints:
+      - Code before the first await runs synchronously.
+      - The await continuation was queued before the .then callback.
+    explanation_md: |
+      `A` and `S` are synchronous. The `await` continuation (`B`) is queued as a microtask *before* the `.then` (`P`)
+      is registered, so `B` then `P`. The timer `T` is a macrotask and runs last.

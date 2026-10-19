@@ -1,0 +1,7 @@
+# Root config (applies to scripts/). Each package has its own [tool.ruff] in pyproject.toml.
+line-length = 130
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

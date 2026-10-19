@@ -1,0 +1,6 @@
+{"id": "pto-days", "input": {"question": "How many PTO days do I get per year?"}, "checks": [{"type": "truthy", "path": "answerable"}, {"type": "regex", "path": "answer", "pattern": "20 days"}, {"type": "len_gte", "path": "citations", "value": 1}]}
+{"id": "log-retention", "input": {"question": "How long are application logs retained?"}, "checks": [{"type": "regex", "path": "answer", "pattern": "30 days"}]}
+{"id": "restricted-doc-hidden", "input": {"question": "What is the salary band for E5?"}, "checks": [{"type": "falsy", "path": "answerable"}, {"type": "equals", "path": "stats.documents_visible", "value": 2}]}
+{"id": "restricted-doc-visible-to-hr", "user_groups": ["hr"], "input": {"question": "What is the salary band for E5?"}, "checks": [{"type": "regex", "path": "answer", "pattern": "155,000"}]}
+{"id": "engineering-runbook", "user_groups": ["engineering"], "input": {"question": "When must SEV1 incidents be acknowledged?"}, "checks": [{"type": "regex", "path": "answer", "pattern": "5 minutes"}]}
+{"id": "out-of-scope", "input": {"question": "What is the capital of France?"}, "checks": [{"type": "falsy", "path": "answerable"}]}
