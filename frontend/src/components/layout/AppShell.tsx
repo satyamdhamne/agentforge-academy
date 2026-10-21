@@ -140,7 +140,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           <div className="lg:hidden"><Logo to="/dashboard" /></div>
           <div className="ml-auto"><TopBarActions onSearch={() => palette.setOpen(true)} /></div>
         </header>
-        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:px-10"><ErrorBoundary resetKey={pathname}>{children ?? <Outlet />}</ErrorBoundary></main>
+        <main id="main" className={/^\/builder\/[^/]+/.test(pathname) ? "min-w-0 flex-1" : "mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:px-10"}><ErrorBoundary resetKey={pathname}>{children ?? <Outlet />}</ErrorBoundary></main>
       </div>
       <CommandPalette open={palette.open} onOpenChange={palette.setOpen} />
     </div>

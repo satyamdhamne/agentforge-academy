@@ -110,3 +110,14 @@ def test_assessment_and_adaptive_recommendations(learner):
     assert learner.get("/mentor/status").json()["assessment"]["recommendations"]["start_track"] == r["recommendations"]["start_track"]
     rec = learner.get("/mentor/recommendations").json()
     assert rec["target_difficulty"] == "beginner" and rec["challenges"]
+
+
+def test_mentor_does_not_leak_locked_hints_and_reveal_costs_points(learner):
+    learner.patch("/me/profile", {"mentor_opt_in": True})
+    hints = learner.get("/challenges/py-two-sum").json()["hints_total"]
+    a = learner.post("/mentor/ask", {"message": "Any hint?", "challenge_slug": "py-two-sum"}).json()
+    assert "Remember the hint" not in a["reply"]
+    learner.post("/challenges/py-two-sum/attempts", {"code": "def two_sum(nums, target):\n    return []\n"})
+    learner.post("/mentor/ask", {"message": "Show me the solution", "challenge_slug": "py-two-sum", "reveal_solution": True})
+    c = learner.get("/challenges/py-two-sum").json()
+    assert len(c["hints"]) == hints  # every hint now counts as used

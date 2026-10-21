@@ -193,6 +193,7 @@ export default function ChallengeWorkspace() {
             )}
           </div>
         )}
+        {user && <p className="text-sm text-muted">Stuck? <Link to={`/mentor?challenge=${slug}`} className="text-signal hover:underline">Ask the AI mentor</Link> for a hint that doesn't cost points.</p>}
 
         {(c.explanation_md || last?.explanation_md) && (
           <div className="rounded-lg border border-pass/30 bg-pass/5 p-4">

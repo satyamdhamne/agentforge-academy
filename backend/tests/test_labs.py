@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 
-
 # ------------------------------------------------------------------ prompt lab
 
 def test_template_catalog_and_detail(api):

@@ -285,12 +285,54 @@ function Announcements() {
   );
 }
 
+interface PortfolioReview { id: string; title: string; summary: string; learner: string; repo_url: string | null; deployment_url: string | null; notes_md: string; tests_md: string; evaluation_md: string; skills: string[]; updated_at: string }
+
+function PortfolioReviewCard({ e }: { e: PortfolioReview }) {
+  const qc = useQueryClient();
+  const [feedback, setFeedback] = useState("");
+  const decide = useMutation({
+    mutationFn: (decision: "verify" | "request_changes") => api.post(`/admin/portfolio-entries/${e.id}/review`, { decision, feedback }),
+    onSuccess: (_, d) => { toast.success(d === "verify" ? "Verified" : "Sent back with feedback"); qc.invalidateQueries({ queryKey: ["admin-portfolio-reviews"] }); },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+  return (
+    <li className="space-y-3 rounded-lg border border-line p-5">
+      <div className="flex flex-wrap items-baseline gap-2"><p className="font-display text-lg font-semibold">{e.title}</p><span className="text-sm text-muted">by {e.learner}</span>
+        <span className="ml-auto text-xs text-muted">{formatDate(e.updated_at)}</span></div>
+      {e.summary && <p className="text-muted">{e.summary}</p>}
+      <div className="flex flex-wrap gap-3 text-sm">
+        {e.repo_url && <a className="text-signal hover:underline" href={e.repo_url} target="_blank" rel="noopener noreferrer nofollow">Repository</a>}
+        {e.deployment_url && <a className="text-signal hover:underline" href={e.deployment_url} target="_blank" rel="noopener noreferrer nofollow">Live demo</a>}
+        {e.skills.length > 0 && <span className="text-muted">{e.skills.join(", ")}</span>}
+      </div>
+      {e.notes_md && <Markdown className="text-sm">{e.notes_md}</Markdown>}
+      {e.tests_md && <div className="text-sm"><p className="font-medium">Testing</p><Markdown>{e.tests_md}</Markdown></div>}
+      {e.evaluation_md && <div className="text-sm"><p className="font-medium">Evaluation</p><Markdown>{e.evaluation_md}</Markdown></div>}
+      <div><Label htmlFor={`pr-${e.id}`}>Feedback for the learner (at least 10 characters)</Label><Textarea id={`pr-${e.id}`} rows={3} value={feedback} onChange={(ev) => setFeedback(ev.target.value)} /></div>
+      <div className="flex gap-2">
+        <Button onClick={() => decide.mutate("verify")} disabled={feedback.trim().length < 10 || decide.isPending}>Verify</Button>
+        <Button variant="secondary" onClick={() => decide.mutate("request_changes")} disabled={feedback.trim().length < 10 || decide.isPending}>Request changes</Button>
+      </div>
+      <p className="text-xs text-faint">Check that the repository exists, runs as described and matches the claims before verifying.</p>
+    </li>
+  );
+}
+
+function PortfolioReviews() {
+  const q = useQuery({ queryKey: ["admin-portfolio-reviews"], queryFn: () => api.get<{ items: PortfolioReview[] }>("/admin/portfolio-reviews") });
+  if (q.error) return <ErrorState error={q.error} />;
+  if (!q.data) return <PageSkeleton />;
+  return q.data.items.length ? <ul className="space-y-4">{q.data.items.map((e) => <PortfolioReviewCard key={e.id} e={e} />)}</ul>
+    : <EmptyState title="No portfolio entries waiting">Learners' verification requests will appear here.</EmptyState>;
+}
+
 export default function Admin() {
   const { isAdmin, isReviewer } = useAuth();
   const tabs = [
     { to: "/admin", label: "Overview", end: true, show: isAdmin },
     { to: "/admin/lessons", label: "Lessons", show: true },
     { to: "/admin/reviews", label: "Review queue", show: isReviewer },
+    { to: "/admin/portfolio", label: "Portfolio verification", show: isReviewer },
     { to: "/admin/users", label: "Users & plans", show: isAdmin },
     { to: "/admin/audit", label: "Audit log", show: isAdmin },
     { to: "/admin/announcements", label: "Announcements", show: true },
@@ -308,6 +350,7 @@ export default function Admin() {
         <Route path="lessons" element={<LessonsList />} />
         <Route path="lessons/:id" element={<LessonEditor />} />
         <Route path="reviews" element={<Reviews />} />
+        <Route path="portfolio" element={<PortfolioReviews />} />
         <Route path="users" element={<Users />} />
         <Route path="audit" element={<Audit />} />
         <Route path="announcements" element={<Announcements />} />

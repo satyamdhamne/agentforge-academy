@@ -2,18 +2,18 @@
 
 **Learn to build AI systems that actually work.** An interactive engineering lab for software engineering, cloud, generative AI, RAG and agentic AI: structured learning paths, code you can run in a sandbox, graded challenges, and a library of 100 agent blueprints, ten of which have complete, tested reference implementations you can run, trace and evaluate.
 
-This repository contains **Phases 1–3** of the roadmap:
+This repository contains **Phases 1–6** of the roadmap:
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Foundation: auth, learning catalog, dashboard, database, seed lessons, tests | Done |
 | 2 | Interactive learning and the challenge engine | Done |
 | 3 | Agent library: 100 blueprints and 10 fully implemented agents | Done |
-| 4 | Prompt lab, RAG lab, evaluation tools | Planned (schema in place) |
-| 5 | Agent Builder Studio with safe execution | Planned (schema in place) |
-| 6 | Interview arena, portfolio, personalization | Planned |
+| 4 | Prompt lab, RAG lab, LLM & SLM lab, evaluation tools | Done |
+| 5 | Agent Builder Studio with safe execution | Done |
+| 6 | Interview arena, portfolio, AI mentor, adaptive difficulty | Done |
 
-Everything runs **without paid API keys**: model calls go through a provider-agnostic adapter with a deterministic mock provider by default. OpenAI-compatible endpoints (including Ollama) and Anthropic plug in through environment variables.
+Everything runs **without paid API keys**: model calls go through a provider-agnostic adapter. Free-plan learners get a deterministic *simulator* that reproduces common model behaviour (following injected instructions unless the prompt treats input as data, wrapping JSON in prose unless asked for only JSON, copying few-shot formats), so prompting techniques can be practised and measured offline. OpenAI-compatible endpoints (including Ollama) and Anthropic plug in through environment variables.
 
 ---
 
@@ -74,9 +74,9 @@ Open http://localhost:5173.
 
 ```bash
 make test             # everything below
-make test-agents      # 96 unit tests for the 10 reference agents + eval harness
+make test-agents      # 108 unit tests: the 10 reference agents, eval harness and prompt simulator
 make test-sandbox     # sandbox executor: limits, timeouts, harness integrity
-make test-backend     # 46 API integration tests on a real PostgreSQL (creates agentforge_test)
+make test-backend     # 78 API integration tests on a real PostgreSQL (creates agentforge_test)
 make test-frontend    # TypeScript check + Vitest/React Testing Library
 make verify-content   # every runnable lesson example prints its documented output; every
                       # exercise solution passes its tests and every starter fails them
@@ -92,7 +92,15 @@ CI (`.github/workflows/ci.yml`) runs lint, all suites, `alembic check` (migratio
 - **Challenge engine**: 35 challenges (25 standalone + 10 lesson exercises) across coding, debugging, architecture, prompting, RAG tuning, agent reliability, security, cloud and timed interviews, plus a weekly project. Code is graded in the sandbox against public and hidden tests; multiple choice discourages guessing; open-ended work goes to a human review queue with a published rubric. Points are awarded once, hints cost 20% each (floor 40%), identical resubmissions aren't re-graded, and attempts are rate-limited and idempotent.
 - **Interactive coding lab**: Monaco editor running Python, JavaScript and SQL through an isolated runner. When no runner is configured, the UI says so and shows expected output instead of pretending to execute anything.
 - **AI Agent Library**: 100 catalog entries across 12 categories, each with an honest verdict: deterministic code (15), workflow (60), retrieval pipeline (10) or agent (15). Ten reference implementations ship with prompts, tool JSON schemas, source, tests, an evaluation dataset, recorded runs with traces, security analysis, cost methodology and deployment notes. You can run them from the UI, inspect the span waterfall, and approve or reject side effects.
-- **Admin CMS**: versioned lessons (draft → review → published, with four-eyes publishing), review queue, users and plans, audit log, announcements, and a privacy-conscious analytics dashboard.
+- **Prompt Engineering Lab**: 10 prompt templates (classification, structured output, RAG, injection resistance, agents, engineering, business) with versions, variables, JSON-schema output and test cases. Run a prompt, fork a template, save versions, and compare up to three variants on every test case with assertions (contains, regex, JSON schema, word limits and more); results are scored, costed and saved as evaluations.
+- **RAG Engineering Lab**: a Northwind handbook dataset with permission-restricted documents and a planted prompt injection, plus your own datasets (Markdown, text or PDF upload). Choose chunking (fixed, recursive, structure-aware), size and overlap, embedder, vector / BM25 / hybrid (RRF) retrieval, top-k and reranking; see every stage's latency, each passage's scores, and an answer whose citations are verified against what was retrieved. Evaluate with recall@k, MRR, hit rate, answer accuracy and grounded rate. Vectors live in pgvector (HNSW) with a pure-Python fallback.
+- **LLM & SLM Lab**: model selector, inference and fine-tuning memory calculator, hosted-vs-self-hosted cost calculator, catalog of open and hosted models, techniques (quantization, LoRA, QLoRA, distillation, routing) and instructions for pointing the platform at a local model (Ollama, vLLM).
+- **Evaluations**: every prompt comparison, RAG evaluation and agent test run, with side-by-side comparison of two runs.
+- **Agent Builder Studio**: a React Flow canvas with ten node types (input, prompt, LLM, tool, retrieval, condition, memory, human approval, evaluation, output) and four templates. Graphs are validated on the server (DAG, references must point to upstream nodes, side-effect tools need an approval on every path), run with budgets (steps, model calls, tokens, time), pause for approval showing exactly what will run, and produce a per-node trace and state.
+- **Interview Arena**: 76 questions across 19 tracks with concise answers, explanations, examples, follow-ups and common mistakes; mock interviews scored on technical accuracy, reasoning, trade-offs and communication with a published rubric.
+- **Portfolio**: entries with repository, demo, skills, Mermaid architecture, testing and evaluation evidence; reviewer verification; an opt-in public page at `/u/<slug>`.
+- **AI Mentor** (opt-in): Socratic answers grounded in and citing the course lessons, error explanations, hints that never bypass the hint penalty, solutions only after an attempt and an explicit request (counted as using all hints), a 16-question skill check that recommends a starting path, and adaptive challenge difficulty from your attempt history. Conversations can be deleted at any time.
+- **Admin CMS**: versioned lessons (draft → review → published, with four-eyes publishing), review queue, portfolio verification, users and plans, audit log, announcements, and a privacy-conscious analytics dashboard.
 - **Plans**: Free, Pro and Team are configuration (`entitlements` table), not code. Admins assign plans; a payment provider can be added later by writing `subscriptions` rows.
 
 ## Repository layout
@@ -109,9 +117,9 @@ agentforge-academy/
 ├── backend/                # FastAPI modular monolith
 │   ├── app/
 │   │   ├── core/           # config, DB, errors, middleware (trace ids, CSRF, headers), rate limiting, security
-│   │   ├── models/         # SQLAlchemy models (41 tables)
-│   │   ├── modules/        # auth, learning, challenges, codelab, agents, admin, misc (routers)
-│   │   ├── services/       # sandbox client, achievements, audit, analytics events, entitlements
+│   │   ├── models/         # SQLAlchemy models (52 tables)
+│   │   ├── modules/        # auth, learning, challenges, codelab, agents, admin, misc, prompts, rag, evals, builder, career
+│   │   ├── services/       # sandbox client, achievements, LLM provider choice and quotas, assertions, RAG pipeline, workflow executor, interview scoring
 │   │   └── seed/           # idempotent loader + content (curriculum, lessons, challenges, platform)
 │   ├── alembic/            # migrations
 │   └── tests/              # integration tests (PostgreSQL)

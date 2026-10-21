@@ -24,6 +24,7 @@ from ..core.errors import AppError, Conflict, Forbidden, NotFound
 from ..models import (
     ChallengeAttempt,
     Exercise,
+    HintReveal,
     InterviewAnswer,
     InterviewSession,
     Lesson,
@@ -534,12 +535,17 @@ def ask(body: AskIn, user: User = CurrentUser, db: Session = DB) -> dict:
     solution_note = None
     exercise = db.scalar(select(Exercise).where(Exercise.slug == body.challenge_slug)) if body.challenge_slug else None
     attempts = 0
+    unlocked: list[str] = []
     if exercise:
         attempts = db.scalar(select(func.count()).select_from(ChallengeAttempt).where(
             ChallengeAttempt.user_id == user.id, ChallengeAttempt.exercise_id == exercise.id)) or 0
         context_notes.append(f"Challenge: {exercise.title}. Prompt: {exercise.prompt_md[:600]}")
-        if exercise.hints:
-            context_notes.append("Hints: " + " | ".join(exercise.hints))
+        # Only hints the learner already unlocked (and paid for) on the challenge page; the mentor must not bypass the penalty.
+        revealed_hints = sorted(db.scalars(select(HintReveal.hint_index).where(HintReveal.user_id == user.id,
+                                                                               HintReveal.exercise_id == exercise.id)).all())
+        unlocked = [exercise.hints[i] for i in revealed_hints if i < len(exercise.hints or [])]
+        if unlocked:
+            context_notes.append("Hints the learner has unlocked: " + " | ".join(unlocked))
     wants_solution = body.reveal_solution or bool(re.search(r"\b(full|complete|whole)?\s*(solution|answer)\b.*\b(give|show|tell)\b|"
                                                            r"\b(give|show|tell) me the (full |complete )?(solution|answer|code)\b",
                                                            body.message, re.I))
@@ -590,17 +596,27 @@ def ask(body: AskIn, user: User = CurrentUser, db: Session = DB) -> dict:
             parts.append(f"From the course: {best[:350]} [1]")
         elif not error_help:
             parts.append("I couldn't find this in the course material yet, so I'll stick to guiding questions.")
-        if exercise and exercise.hints and not reveal:
-            parts.append(f"Hint: {exercise.hints[0]}")
+        if exercise and not reveal:
+            if unlocked:
+                parts.append(f"Remember the hint you unlocked: {unlocked[-1]}")
+            else:
+                parts.append("Start from the examples: work one through by hand and write down each step before coding it.")
         if solution_note:
             parts.append(solution_note)
         if reveal and exercise:
+            parts.append("Viewing the solution counts as using all hints for scoring.")
             parts.append(f"Here is the reference solution, since you asked after attempting:\n```{exercise.language or ''}\n{exercise.solution}\n```")
         question = ("What output did you expect at that line, and what did you get?" if body.error else
                     "Which part of the explanation is unclear - can you restate it in your own words?" if not exercise else
                     "What is the smallest input where your current approach goes wrong?")
         parts.append(question)
         reply = "\n\n".join(parts)
+
+    if reveal and exercise:  # seeing the solution counts as using every hint, so later passes earn the minimum points
+        have = set(db.scalars(select(HintReveal.hint_index).where(HintReveal.user_id == user.id, HintReveal.exercise_id == exercise.id)).all())
+        for i in range(max(len(exercise.hints or []), 3)):
+            if i not in have:
+                db.add(HintReveal(user_id=user.id, exercise_id=exercise.id, hint_index=i))
 
     stored = False
     if user.profile.mentor_opt_in:

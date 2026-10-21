@@ -37,7 +37,8 @@ test.describe("signed-in learner", () => {
   test("navigates between pages with in-app links without crashing", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    for (const label of ["Learning Paths", "Interactive Coding Lab", "Daily Challenges", "AI Agent Library", "Real-World Projects", "Dashboard"]) {
+    for (const label of ["Learning Paths", "Interactive Coding Lab", "Daily Challenges", "AI Agent Library", "Real-World Projects", "Agent Builder Studio",
+      "RAG Engineering Lab", "Prompt Engineering Lab", "LLM & SLM Lab", "Evaluations", "Interview Arena", "Portfolio", "AI Mentor", "Dashboard"]) {
       await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: label }).click();
       await expect(page.locator("main h1").first()).toBeVisible();
     }
@@ -80,5 +81,45 @@ test.describe("signed-in learner", () => {
     await page.getByText("have independent counts").click();
     await page.getByRole("button", { name: "Check answers" }).click();
     await expect(page.getByText(/100% - passed/)).toBeVisible();
+  });
+
+  test("compares prompt versions and the hardened prompt resists injection", async ({ page }) => {
+    await page.goto("/labs/prompts/injection-safe-summary");
+    await page.getByRole("button", { name: /^Compare 2 variants/ }).click();
+    await expect(page.getByText("Best:")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("row", { name: /^v2 best/ })).toContainText("100%");
+  });
+
+  test("answers from the handbook with citations and evaluates retrieval", async ({ page }) => {
+    await page.goto("/labs/rag?dataset=northwind-handbook");
+    await page.getByLabel("Question").fill("How many API requests per minute can a key send?");
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
+    await expect(page.getByText("Grounded", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/100 requests per minute/).first()).toBeVisible();
+    await page.getByRole("tab", { name: "Evaluate" }).click();
+    await page.getByRole("button", { name: "Run evaluation" }).click();
+    await expect(page.getByText(/questions passed in/)).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("builds a workflow from a template, pauses for approval and completes", async ({ page }) => {
+    await page.goto("/builder");
+    await page.getByRole("button", { name: /^Ticket triage with human approval/ }).click();
+    await page.waitForURL(/\/builder\/[0-9a-f-]+$/);
+    await expect(page.getByText("Valid", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    await expect(page.getByText("awaiting approval")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("If approved, these will run next:")).toBeVisible();
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(page.getByText("succeeded", { exact: true })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("takes a mock interview and gets rubric feedback", async ({ page }) => {
+    await page.goto("/interviews/javascript");
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.waitForURL(/\/interviews\/session\//);
+    await page.getByLabel("Your answer").fill("It depends on the trade-off because each option has a cost; for example, a cache is faster but can serve stale data.");
+    await page.getByRole("button", { name: "Submit answer" }).click();
+    await expect(page.getByText("overall for this answer")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Concise answer")).toBeVisible();
   });
 });

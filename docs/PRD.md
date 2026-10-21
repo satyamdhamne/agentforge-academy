@@ -36,9 +36,9 @@ The most practical place to learn software engineering, cloud and AI engineering
 | **1 Foundation** | Auth (sessions, CSRF, verification, reset, roles), catalog (16 tracks), dashboard, PostgreSQL schema and migrations, seed lessons, tests |
 | **2 Interactive learning** | Lesson player (15 parts), runnable examples, quizzes gating completion, sandboxed code lab, challenge engine (code / MCQ / manual review, daily, weekly, timed, hints, anti-gaming), achievements, admin CMS with versioning and review |
 | **3 Agent library** | 100 blueprints with verdicts, 10 complete reference agents with tests, eval datasets, traces, approvals and detail pages |
-| 4 Labs | Prompt lab (versioning, A/B, rubrics), RAG lab on pgvector (pipeline visualisation, retrieval metrics, permissions), evaluation tools |
-| 5 Agent Builder | React Flow canvas, validated graphs, allowlisted node registry, server-side execution with budgets, approvals, traces |
-| 6 Career | Interview arena with rubric-scored mock interviews, public portfolios, opt-in AI mentor |
+| **4 Labs** | Prompt lab (versioning, A/B, rubrics), RAG lab on pgvector (pipeline visualisation, retrieval metrics, permissions), evaluation tools |
+| **5 Agent Builder** | React Flow canvas, validated graphs, allowlisted node registry, server-side execution with budgets, approvals, traces |
+| **6 Career** | Interview arena with rubric-scored mock interviews, public portfolios, opt-in AI mentor |
 
 ## Functional requirements (Phases 1–3)
 
@@ -78,9 +78,9 @@ The most practical place to learn software engineering, cloud and AI engineering
 | Conversion | Free → paid | Tracked once payments exist |
 | Inference cost | USD per active learner per month | Below plan margin; alert on regressions |
 
-## Out of scope for Phases 1–3
+## Out of scope so far
 
-Payments, team dashboards, community features, the Agent Builder, prompt and RAG labs, LLM/SLM fine-tuning labs, interview arena, public portfolios, the AI mentor, and streaming agent runs. The schema already includes their tables so later phases don't require disruptive migrations.
+Payments, team dashboards, community features, the cloud deployment lab, the system design studio, the organization use-case library, hands-on fine-tuning runs (the LLM & SLM lab plans and estimates them), and streaming agent or workflow runs.
 
 ## Risks
 

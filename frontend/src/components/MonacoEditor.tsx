@@ -2,11 +2,13 @@ import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import { useEffect, useState } from "react";
 
 // Bundle Monaco locally instead of loading it from a CDN.
 self.MonacoEnvironment = {
-  getWorker: (_: unknown, label: string) => (label === "typescript" || label === "javascript" ? new TsWorker() : new EditorWorker()),
+  getWorker: (_: unknown, label: string) =>
+    label === "typescript" || label === "javascript" ? new TsWorker() : label === "json" ? new JsonWorker() : new EditorWorker(),
 };
 loader.config({ monaco });
 

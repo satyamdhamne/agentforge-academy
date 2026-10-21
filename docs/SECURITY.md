@@ -77,6 +77,11 @@ Development note: `make dev-sandbox` runs the runner directly on your machine wi
 | Document permissions enforced at retrieval time (PDF Knowledge Agent) | ✅ eval case |
 | PII redaction before model calls (`core/text.py`, used by the Customer Support Triage agent; also taught in a security challenge) | ✅ partial: extend to every agent that sends free text to a provider |
 | Cost tracking per run with configurable prices; unknown prices flagged in analytics | ✅ |
+| RAG lab and mentor: permission filter applied before retrieval (restricted chunks never reach the prompt); citations verified against retrieved passages; a planted injection document is part of the evaluation set | ✅ tested |
+| Agent Builder: only allowlisted tools; SQL tool is read-only (SQLite authorizer); calculator parses an AST, no `eval`; side-effect tools rejected by the validator unless a human approval node is on every path; budgets per run; approvals and cancellations audit-logged | ✅ tested |
+| Prompt and RAG labs: daily quotas per plan; Free plan never reaches a paid model | ✅ |
+| AI mentor is opt-in; conversations are deletable; it only sees hints the learner already unlocked; full solutions require an attempt plus an explicit request and then count as all hints used | ✅ tested |
+| Portfolio pages are private by default; publishing is an explicit opt-in; drafts and reviewer feedback are never public; external links must be https and open with `rel="noopener noreferrer nofollow"` | ✅ |
 
 ## Data protection and privacy
 

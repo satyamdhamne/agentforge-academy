@@ -1,6 +1,6 @@
 import {
   Award, BookOpen, Bot, Boxes, BrainCircuit, Building2, Cloud, Code2, Database, FolderGit2, GraduationCap,
-  LayoutDashboard, MessageSquareQuote, Network, Shield, Swords, Trophy, Users, Workflow, type LucideIcon,
+  Gauge, LayoutDashboard, MessageSquareQuote, Network, Shield, Sparkles, Swords, Trophy, Users, Workflow, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -27,26 +27,11 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     group: "Build with AI",
     items: [
       { label: "AI Agent Library", to: "/agents", icon: Bot },
-      {
-        label: "Agent Builder Studio", to: "/soon/agent-builder", icon: Workflow,
-        planned: { phase: "Phase 5", summary: "A visual canvas for input, LLM, prompt, tool, retrieval, condition, memory, approval, evaluation and output nodes - validated graphs, an allowlisted node registry, server-side execution with budgets, timeouts and approval gates.",
-          meanwhile: [{ label: "Study the reference agents and their traces", to: "/agents?implemented=true" }, { label: "Solve the workflow DAG challenge", to: "/challenges/py-workflow-execution-order" }] },
-      },
-      {
-        label: "RAG Engineering Lab", to: "/soon/rag-lab", icon: Database,
-        planned: { phase: "Phase 4", summary: "An interactive Upload → Parse → Chunk → Embed → Index → Retrieve → Rerank → Generate → Cite → Evaluate pipeline on pgvector with tunable chunking, top-k and search strategy.",
-          meanwhile: [{ label: "Chunking strategies lesson", to: "/lessons/rag-chunking-strategies" }, { label: "Run the PDF Knowledge Agent", to: "/agents/pdf-knowledge-agent" }, { label: "RAG tuning challenges", to: "/challenges?category=rag" }] },
-      },
-      {
-        label: "Prompt Engineering Lab", to: "/soon/prompt-lab", icon: MessageSquareQuote,
-        planned: { phase: "Phase 4", summary: "Editable prompts with versioning, side-by-side model comparison, scoring rubrics, A/B tests and injection-defence exercises.",
-          meanwhile: [{ label: "Prompting challenges", to: "/challenges?category=prompt" }, { label: "Tokens and context windows", to: "/lessons/tokens-context-windows" }] },
-      },
-      {
-        label: "LLM & SLM Lab", to: "/soon/llm-lab", icon: BrainCircuit,
-        planned: { phase: "Phase 4", summary: "Model selection by quality, privacy, latency and cost, with CPU-friendly local demos through Ollama-compatible adapters and mock inference.",
-          meanwhile: [{ label: "Embeddings and similarity", to: "/lessons/embeddings-similarity" }] },
-      },
+      { label: "Agent Builder Studio", to: "/builder", icon: Workflow, auth: true },
+      { label: "RAG Engineering Lab", to: "/labs/rag", icon: Database },
+      { label: "Prompt Engineering Lab", to: "/labs/prompts", icon: MessageSquareQuote },
+      { label: "LLM & SLM Lab", to: "/labs/models", icon: BrainCircuit },
+      { label: "Evaluations", to: "/evaluations", icon: Gauge, auth: true },
       {
         label: "Cloud Deployment Lab", to: "/soon/cloud-lab", icon: Cloud,
         planned: { phase: "A later phase", summary: "Guided deployments to AWS (ECS, Lambda, RDS) with Terraform modules, cost estimates and security checks.",
@@ -62,16 +47,9 @@ export const NAV: { group: string; items: NavItem[] }[] = [
   {
     group: "Grow",
     items: [
-      {
-        label: "Interview Arena", to: "/soon/interview-arena", icon: Trophy,
-        planned: { phase: "Phase 6", summary: "Question banks for 19 tracks and mock interviews scored on accuracy, reasoning, trade-offs and communication with transparent rubrics.",
-          meanwhile: [{ label: "Timed interview challenges", to: "/challenges?category=interview" }] },
-      },
-      {
-        label: "Portfolio", to: "/soon/portfolio", icon: Boxes,
-        planned: { phase: "Phase 6", summary: "Publish verified projects with repos, diagrams, tests, evaluations and deployment links on a shareable page.",
-          meanwhile: [{ label: "Pick a real-world project", to: "/projects" }] },
-      },
+      { label: "Interview Arena", to: "/interviews", icon: Trophy },
+      { label: "Portfolio", to: "/portfolio", icon: Boxes, auth: true },
+      { label: "AI Mentor", to: "/mentor", icon: Sparkles, auth: true },
       {
         label: "Organization Use Cases", to: "/soon/org-use-cases", icon: Building2,
         planned: { phase: "A later phase", summary: "Curated enterprise scenarios showing where agents, workflows, retrieval or plain code fit inside real organisations.",

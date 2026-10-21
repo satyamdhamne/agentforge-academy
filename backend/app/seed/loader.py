@@ -210,6 +210,10 @@ def _language(path: str) -> str:
     return {"py": "python", "jsonl": "json", "md": "markdown", "json": "json"}.get(path.rsplit(".", 1)[-1], "text")
 
 
+def current_has_runs(v: AgentVersion | None) -> bool:
+    return v is not None and bool(v.example_runs) and v.eval_report is not None
+
+
 def seed_agents(db: Session, with_runs: bool = True) -> dict[str, int]:
     """Catalog entries + versioned blueprints. Implemented agents also get source files, example runs and evals."""
     from agentforge_agents.catalog import all_entries
@@ -234,7 +238,8 @@ def seed_agents(db: Session, with_runs: bool = True) -> dict[str, int]:
         files = source_files(spec) if spec else []
         fingerprint = _digest({"blueprint": e, "files": [(f["path"], f["content"]) for f in files]})
         current = agent.current_version
-        if current is not None and (current.blueprint or {}).get("_fingerprint") == fingerprint:
+        runs_missing = bool(spec and with_runs and not current_has_runs(current))
+        if current is not None and (current.blueprint or {}).get("_fingerprint") == fingerprint and not runs_missing:
             stats["implemented"] += impl
             continue
         example_runs: list[dict] = []

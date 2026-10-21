@@ -45,7 +45,7 @@ Priorities: **P0** blocks launch, **P1** needed soon after launch, **P2** valuab
 | H-05 | Error tracking (Sentry or equivalent) wired to trace ids | |
 | H-06 | Backups and restore drill for RDS | See DEPLOYMENT.md |
 
-## Phase 4: prompt lab, RAG lab, evaluations (P1)
+## Phase 4: prompt lab, RAG lab, evaluations (done)
 
 | ID | Item |
 |---|---|
@@ -57,20 +57,20 @@ Priorities: **P0** blocks launch, **P1** needed soon after launch, **P2** valuab
 | P4-06 | Retrieval metrics (recall@k, MRR), faithfulness spot checks, latency and cost per query |
 | P4-07 | Tenant isolation and document-level permissions in retrieval queries |
 | P4-08 | Evaluation runs stored in `evaluations` / `evaluation_cases` with regression comparison |
-| P4-09 | 15 more complete lessons (RAG, prompting, LLM engineering, AI security) |
+| P4-09 | 15 more complete lessons (RAG, prompting, LLM engineering, AI security) *(still open)* |
 
-## Phase 5: Agent Builder Studio (P1)
+## Phase 5: Agent Builder Studio (done)
 
 | ID | Item |
 |---|---|
 | P5-01 | React Flow canvas with input, LLM, prompt, tool, retrieval, condition, memory, approval, evaluation and output nodes |
 | P5-02 | Graph validation (DAG with bounded loops, typed ports, unknown-node rejection) shared by client and server |
 | P5-03 | Allowlisted node registry; credentials referenced by `credential_refs` only |
-| P5-04 | Mock execution in the browser, then server-side execution in a worker with budgets, timeouts and cancellation |
+| P5-04 | Server-side execution with budgets, timeouts, approval pause/resume and cancellation *(done, synchronous; worker queue still open)* |
 | P5-05 | Execution traces, state inspection per node, approval gates for side effects, audit logs |
-| P5-06 | Run streaming over SSE once execution moves to a worker queue (SQS + ECS) |
+| P5-06 | Run streaming over SSE once execution moves to a worker queue (SQS + ECS) *(still open)* |
 
-## Phase 6: interview arena, portfolio, personalization (P2)
+## Phase 6: interview arena, portfolio, personalization (done)
 
 | ID | Item |
 |---|---|
@@ -79,6 +79,16 @@ Priorities: **P0** blocks launch, **P1** needed soon after launch, **P2** valuab
 | P6-03 | Portfolio entries with repo, diagrams, tests, evaluations and deployment URL; verification workflow; public pages |
 | P6-04 | Opt-in AI mentor grounded in course content with solution-withholding policy and privacy controls |
 | P6-05 | Adaptive difficulty from attempt history |
+
+## Follow-ups from Phases 4–6
+
+| ID | Item |
+|---|---|
+| F-01 | Semantic embeddings by default once a model download is acceptable in the image (MiniLM is supported when `sentence-transformers` is installed) |
+| F-02 | Builder: typed ports and client-side validation mirroring the server rules; loops with explicit bounds |
+| F-03 | Mentor panel embedded in lesson and challenge pages (today it links to the mentor with context) |
+| F-04 | Model-graded interview answers calibrated against human-rated samples before enabling for all paid plans |
+| F-05 | Credential references for builder HTTP tools (only allowlisted, credential-free tools exist today) |
 
 ## Later (P2)
 

@@ -29,8 +29,12 @@ flowchart LR
 app/
 ├── core/       config (env-only, production guards) · db · errors (one envelope) · middleware · ratelimit · security
 ├── models/     identity · learning · agents · platform (workflows, prompts, evals, billing, analytics, audit)
-├── modules/    auth · learning · challenges · codelab · agents · admin · misc   ← routers, thin
+├── modules/    auth · learning · challenges · codelab · agents · admin · misc · prompts · rag · evals · builder · career   ← routers, thin
 ├── services/   sandbox client · achievements · common (audit, events, entitlements, email, pagination)
+│               llm (provider choice per plan, quotas, cost) · assertions · templating
+│               rag/ (chunking, embeddings, retrieval: pgvector or Python cosine, BM25, RRF, rerank; pipeline, evaluation)
+│               builder/ (node registry and validation, allowlisted tools, executor with budgets and approvals)
+│               interview_scoring (transparent rubric; optional model grading cross-checked by the rubric)
 └── seed/       loader + YAML/Markdown content
 ```
 
@@ -174,6 +178,11 @@ Versioned REST under `/api/v1`, documented at `/api/v1/docs` (OpenAPI 3.1). List
 | Challenges | `GET /challenges` · `GET /challenges/daily` · `GET /challenges/{slug}` · `POST /challenges/{slug}/hints/{index}` · `POST, GET /challenges/{slug}/attempts` |
 | Code lab | `GET /sandbox/status` · `POST /sandbox/run` |
 | Agents | `GET /agents` · `GET /agents/{slug}` · `GET /agents/{slug}/files/{path}` · `POST /agents/{slug}/runs` · `GET /agents/runs/mine` · `GET /agents/runs/{id}` · `POST /agents/runs/{id}/decision` |
+| Prompt lab | `GET /prompts/templates` · `GET /prompts/templates/{slug}` · `POST /prompts/templates/{slug}/fork` · `POST /prompts/templates/{slug}/versions` · `PUT /prompts/templates/{slug}/test-cases` · `POST /prompts/run` · `POST /prompts/compare` |
+| RAG lab | `GET /rag/options` · `GET, POST /rag/datasets` · `GET /rag/datasets/{key}` · `POST /rag/datasets/{key}/documents` · `DELETE /rag/datasets/{key}/documents/{id}` · `POST /rag/datasets/{key}/chunk-preview` · `POST /rag/query` · `POST /rag/evaluate` |
+| Evaluations & models | `GET /evaluations` · `GET /evaluations/{id}` · `GET /evaluations/{a}/compare/{b}` · `POST /agents/{slug}/evaluate` · `GET /llm-lab/catalog` · `GET /llm-lab/providers` |
+| Agent Builder | `GET /builder/node-types` · `GET /builder/templates` · `GET, POST /builder/workflows` · `GET, PUT, DELETE /builder/workflows/{id}` · `POST /builder/validate` · `POST, GET /builder/workflows/{id}/runs` · `GET /builder/runs/{id}` · `POST /builder/runs/{id}/decision` · `POST /builder/runs/{id}/cancel` |
+| Career | `GET /interviews/tracks` · `GET /interviews/questions` · `POST, GET /interviews/sessions` · `GET /interviews/sessions/{id}` · `POST /interviews/sessions/{id}/answers` · `POST /interviews/sessions/{id}/finish` · `GET, PATCH /me/portfolio` · `POST /me/portfolio/entries` · `PUT, DELETE /me/portfolio/entries/{id}` · `POST /me/portfolio/entries/{id}/submit` · `GET /portfolios/{slug}` · `GET /admin/portfolio-reviews` · `POST /admin/portfolio-entries/{id}/review` · `GET /mentor/status` · `GET, POST /mentor/assessment` · `GET /mentor/recommendations` · `POST /mentor/ask` · `GET, DELETE /mentor/history` |
 | Admin | `GET /admin/lessons` · `GET /admin/lessons/{id}` · `POST /admin/lessons/{id}/versions` · `POST /admin/lesson-versions/{id}/submit\|publish\|reject` · `GET /admin/reviews` · `POST /admin/attempts/{id}/review` · `GET /admin/users` · `PATCH /admin/users/{id}/plan` · `GET /admin/audit-logs` · `GET /admin/analytics` · `POST /admin/announcements` |
 | Health | `GET /healthz` (liveness) · `GET /readyz` (database) |
 
@@ -187,7 +196,9 @@ src/
 ├── components/   ui primitives (shadcn-style on Radix), layout (sidebar, ⌘K palette), CodeRunner,
 │                 Monaco (bundled locally, no CDN), TraceView, Mermaid, Markdown, CodeBlock
 └── pages/        Landing, auth, Dashboard, Paths, Lesson, CodeLab, Challenges, ChallengeWorkspace,
-                  Agents, AgentDetail, Projects, Progress, Settings, Pricing, Planned, admin/*
+                  Agents, AgentDetail, Projects, Progress, Settings, Pricing, Planned, admin/*,
+                  labs/{PromptLab, RagLab, ModelsLab}, Evaluations, builder/{BuilderHome, BuilderStudio (React Flow)},
+                  Interviews, Portfolio (+ public /u/:slug), Mentor
 ```
 
 Routes are code-split; Monaco and Mermaid load only on pages that need them. The production CSP forbids inline and third-party scripts.

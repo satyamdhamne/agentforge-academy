@@ -177,6 +177,32 @@ function RunPanel({ agent }: { agent: AD }) {
   );
 }
 
+function RunEval({ slug }: { slug: string }) {
+  const { user } = useAuth();
+  const m = useMutation({
+    mutationFn: () => api.post<NonNullable<AD["eval_report"]> & { evaluation_id: string }>(`/agents/${slug}/evaluate`),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  if (!user) return null;
+  return (
+    <div className="space-y-4 rounded-lg border border-line p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="mr-auto text-sm text-muted">Run the agent's test suite yourself. Results are saved to your Evaluations.</p>
+        <Button size="sm" variant="secondary" onClick={() => m.mutate()} disabled={m.isPending}><Play />{m.isPending ? "Running…" : "Run evaluation"}</Button>
+      </div>
+      {m.data && (
+        <div className="space-y-3">
+          <p className="text-sm"><span className="font-medium tabular-nums">{m.data.passed}/{m.data.cases}</span> cases passed just now.{" "}
+            <Link className="text-signal hover:underline" to={`/evaluations/${m.data.evaluation_id}`}>Open in Evaluations</Link></p>
+          <ul className="space-y-1 text-sm">{m.data.results.map((c) => (
+            <li key={c.id} className="flex items-center gap-2">{c.passed ? <CheckCircle2 className="size-4 text-pass" /> : <XCircle className="size-4 text-fail" />}<span className="font-mono text-xs">{c.id}</span></li>
+          ))}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EvalReport({ r, criteria }: { r: NonNullable<AD["eval_report"]>; criteria?: string }) {
   return (
     <div className="space-y-4">
@@ -320,7 +346,10 @@ export default function AgentDetail() {
 
           {impl && (
             <TabsContent value="eval">
-              {a.eval_report ? <EvalReport r={a.eval_report} criteria={asStr((bp.evaluation as Dict | undefined)?.criteria)} /> : <p className="text-muted">No evaluation report yet.</p>}
+              <div className="space-y-8">
+                <RunEval slug={a.slug} />
+                {a.eval_report ? <EvalReport r={a.eval_report} criteria={asStr((bp.evaluation as Dict | undefined)?.criteria)} /> : <p className="text-muted">No evaluation report yet.</p>}
+              </div>
             </TabsContent>
           )}
 
