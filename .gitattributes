@@ -1,0 +1,9 @@
+# Normalise line endings so Windows checkouts work inside Linux containers.
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
+Makefile text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

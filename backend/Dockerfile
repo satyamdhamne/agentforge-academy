@@ -16,7 +16,10 @@ COPY backend/alembic backend/alembic
 COPY backend/alembic.ini backend/alembic.ini
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # Editable install keeps agent sources (and their tests) on disk: the agent detail pages show them.
-RUN pip install -e ./agents -e ./backend && chmod +x /usr/local/bin/docker-entrypoint.sh
+# Strip Windows line endings (CRLF checkouts) so the shell script always runs.
+RUN pip install -e ./agents -e ./backend \
+ && sed -i "s/\r$//" /usr/local/bin/docker-entrypoint.sh \
+ && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER app
 WORKDIR /srv/backend
