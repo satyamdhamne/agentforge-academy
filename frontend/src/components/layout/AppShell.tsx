@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { ErrorBoundary } from "../ErrorBoundary";
 import * as D from "@radix-ui/react-dialog";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { LogOut, Menu as MenuIcon, Moon, Search, Settings, Sun, User as UserIcon } from "lucide-react";
@@ -115,6 +116,7 @@ export function TopBarActions({ onSearch }: { onSearch: () => void }) {
 export function AppShell({ children }: { children?: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const palette = useCommandPalette();
+  const { pathname } = useLocation();
   return (
     <div className="flex min-h-full">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-panel focus:px-3 focus:py-2">Skip to content</a>
@@ -138,7 +140,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
           <div className="lg:hidden"><Logo to="/dashboard" /></div>
           <div className="ml-auto"><TopBarActions onSearch={() => palette.setOpen(true)} /></div>
         </header>
-        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:px-10">{children ?? <Outlet />}</main>
+        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:px-10"><ErrorBoundary resetKey={pathname}>{children ?? <Outlet />}</ErrorBoundary></main>
       </div>
       <CommandPalette open={palette.open} onOpenChange={palette.setOpen} />
     </div>

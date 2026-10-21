@@ -3,6 +3,19 @@ import { expect, test, type Page } from "@playwright/test";
 const EMAIL = process.env.E2E_EMAIL ?? "learner@example.com";
 const PASSWORD = process.env.E2E_PASSWORD ?? "ChangeMe-Learner-123!";
 
+// Current Chrome returns a Promise from window.scrollTo (older Chromium returns undefined).
+// Emulate it everywhere so effects that accidentally return its result are caught.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = window.scrollTo.bind(window) as (...a: unknown[]) => void;
+    (window as unknown as { scrollTo: (...a: unknown[]) => Promise<void> }).scrollTo = (...args: unknown[]) => {
+      original(...args);
+      return Promise.resolve();
+    };
+  });
+  page.on("pageerror", (err) => { throw err; });
+});
+
 async function signIn(page: Page) {
   await page.goto("/login");
   await page.fill("#email", EMAIL);
@@ -20,6 +33,18 @@ test("landing page explains the product and replays a real agent trace", async (
 
 test.describe("signed-in learner", () => {
   test.beforeEach(async ({ page }) => signIn(page));
+
+  test("navigates between pages with in-app links without crashing", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    for (const label of ["Learning Paths", "Interactive Coding Lab", "Daily Challenges", "AI Agent Library", "Real-World Projects", "Dashboard"]) {
+      await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: label }).click();
+      await expect(page.locator("main h1").first()).toBeVisible();
+    }
+    await page.getByRole("link", { name: "Continue lesson" }).click();
+    await expect(page.getByRole("heading", { level: 2, name: "The idea" })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 
   test("runs a lesson example in the sandbox", async ({ page }) => {
     await page.goto("/lessons/js-closures");

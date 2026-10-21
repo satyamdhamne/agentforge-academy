@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AppShell } from "./components/layout/AppShell";
 import { PageSkeleton } from "./components/ui/skeleton";
 import { useAuth } from "./lib/auth";
@@ -38,13 +39,17 @@ function RequireAuth({ children, staff }: { children: ReactNode; staff?: boolean
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  // Braces matter: in current Chrome window.scrollTo returns a Promise, and React would call it as a cleanup.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
   return null;
 }
 
 export function App() {
+  const { pathname } = useLocation();
   return (
-    <>
+    <ErrorBoundary resetKey={pathname}>
       <ScrollToTop />
       <Suspense fallback={<div className="p-10"><PageSkeleton /></div>}>
         <Routes>
@@ -74,6 +79,6 @@ export function App() {
           </Route>
         </Routes>
       </Suspense>
-    </>
+    </ErrorBoundary>
   );
 }
