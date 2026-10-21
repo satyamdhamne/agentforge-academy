@@ -165,6 +165,20 @@ class PortfolioEntry(UUIDPk, Timestamps, Base):
     deployment_url: Mapped[str | None] = mapped_column(String(500))
     notes_md: Mapped[str] = mapped_column(Text, default="")
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    summary: Mapped[str] = mapped_column(String(500), default="")
+    skills: Mapped[list[Any]] = mapped_column(default=list)
+    architecture_mermaid: Mapped[str] = mapped_column(Text, default="")
+    screenshot_urls: Mapped[list[Any]] = mapped_column(default=list)
+    tests_md: Mapped[str] = mapped_column(Text, default="")
+    evaluation_md: Mapped[str] = mapped_column(Text, default="")
+    # draft -> submitted -> verified | changes_requested. Badges count only verified entries.
+    review_status: Mapped[str] = mapped_column(String(20), default="draft")
+    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    review_feedback: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    __table_args__ = (CheckConstraint("review_status IN ('draft', 'submitted', 'verified', 'changes_requested')", name="review_status"),)
 
 
 # ---------------------------------------------------------------------------- billing

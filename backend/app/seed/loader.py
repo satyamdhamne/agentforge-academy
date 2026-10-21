@@ -37,10 +37,17 @@ from ..models import (
     LessonVersion,
     Module,
     Project,
+    PromptTemplate,
+    PromptTestCase,
+    PromptVersion,
     Question,
+    RagDataset,
+    RagDocument,
+    RagQuestion,
     Role,
     User,
 )
+from ..services.templating import variables as template_variables
 
 log = logging.getLogger("agentforge.seed")
 CONTENT = Path(__file__).parent / "content"
@@ -257,6 +264,132 @@ def seed_agents(db: Session, with_runs: bool = True) -> dict[str, int]:
     return stats
 
 
+# ------------------------------------------------------------------ prompt lab
+
+def seed_prompts(db: Session) -> int:
+    data = _yaml("prompts.yaml")
+    for t in data["templates"]:
+        tpl = _upsert(db, PromptTemplate, {"slug": t["slug"]}, {"name": t["name"], "category": t["category"],
+                                                                 "description": t.get("description", ""), "owner_id": None, "status": "published"})
+        existing = {v.version: v for v in db.scalars(select(PromptVersion).where(PromptVersion.template_id == tpl.id)).all()}
+        for i, v in enumerate(t["versions"], start=1):
+            values = {"system": v.get("system", ""), "user_template": v["user_template"], "params": v.get("params", {}),
+                      "variables": template_variables(v.get("system", "") + "\n" + v["user_template"]), "change_note": v.get("change_note", "")}
+            if i in existing:
+                for k, val in values.items():
+                    setattr(existing[i], k, val)
+            else:
+                existing[i] = PromptVersion(template_id=tpl.id, version=i, **values)
+                db.add(existing[i])
+        db.flush()
+        tpl.current_version_id = existing[len(t["versions"])].id
+        for c in db.scalars(select(PromptTestCase).where(PromptTestCase.template_id == tpl.id)).all():
+            db.delete(c)
+        db.flush()
+        for i, c in enumerate(t.get("test_cases", [])):
+            db.add(PromptTestCase(template_id=tpl.id, name=c["name"], variables=c.get("variables", {}),
+                                  assertions=c.get("assertions", []), order_index=i))
+    return len(data["templates"])
+
+
+# ------------------------------------------------------------------ RAG lab
+
+def _front_matter(raw: str) -> tuple[dict[str, str], str]:
+    meta: dict[str, str] = {}
+    if raw.startswith("---"):
+        head, _, body = raw[3:].partition("\n---")
+        for line in head.strip().splitlines():
+            k, _, v = line.partition(":")
+            meta[k.strip()] = v.strip()
+        return meta, body.lstrip("\n")
+    return meta, raw
+
+
+def seed_rag(db: Session) -> dict[str, int]:
+    from ..services.rag.retrieval import clean_text
+
+    ds = _upsert(db, RagDataset, {"slug": "northwind-handbook"}, {
+        "name": "Northwind Cloud handbook (demo)", "is_public": True, "owner_id": None,
+        "description": "Policies, runbooks and FAQs of a fictional SaaS company. Some documents are restricted to engineering or HR, "
+                       "and one imported page contains a prompt-injection attempt."})
+    keep: set[str] = set()
+    for path in sorted((CONTENT / "rag" / "northwind").glob("*.md")):
+        meta, body = _front_matter(path.read_text(encoding="utf-8"))
+        text = clean_text(body)
+        h = hashlib.sha256(text.encode()).hexdigest()
+        groups = [g.strip() for g in meta.get("allowed_groups", "everyone").split(",") if g.strip()]
+        doc = db.scalar(select(RagDocument).where(RagDocument.dataset_id == ds.id, RagDocument.source == path.stem))
+        if doc is None:
+            db.add(RagDocument(dataset_id=ds.id, title=meta.get("title", path.stem), source=path.stem, mime="text/markdown",
+                               text=text, content_hash=h, allowed_groups=groups))
+        else:
+            doc.title, doc.text, doc.content_hash, doc.allowed_groups = meta.get("title", path.stem), text, h, groups
+        keep.add(path.stem)
+    for doc in db.scalars(select(RagDocument).where(RagDocument.dataset_id == ds.id)).all():
+        if doc.source not in keep:
+            db.delete(doc)
+    for q in db.scalars(select(RagQuestion).where(RagQuestion.dataset_id == ds.id)).all():
+        db.delete(q)
+    questions = _yaml("rag/questions.yaml")["northwind-handbook"]
+    for q in questions:
+        db.add(RagQuestion(dataset_id=ds.id, question=q["question"], relevant_sources=q.get("relevant_sources", []),
+                           answer_contains=q.get("answer_contains", []), user_groups=q.get("user_groups", ["everyone"])))
+    db.flush()
+    return {"documents": len(keep), "questions": len(questions)}
+
+
+# ------------------------------------------------------------------ interview arena & mentor corpus
+
+def seed_interviews(db: Session) -> int:
+    tracks = _yaml("interviews.yaml")["tracks"]
+    n = 0
+    for slug, t in tracks.items():
+        for i, q in enumerate(t["questions"]):
+            values = {"kind": "open", "difficulty": q["difficulty"], "prompt_md": q["prompt"], "concise_answer": q["concise"],
+                      "explanation_md": q["explanation"], "follow_ups": q.get("follow_ups", []), "common_mistakes": q.get("mistakes", []),
+                      "answer": {"example": q.get("example", ""), "key_points": q["key_points"]}, "options": []}
+            _upsert(db, Question, {"interview_track": slug, "order_index": i, "assessment_id": None}, values)
+            n += 1
+    return n
+
+
+LESSON_PARTS = [("explanation", "The idea"), ("why_it_matters", "Why it matters"), ("mental_model", "Mental model"),
+                ("real_world", "In the real world"), ("debugging", "Debugging"), ("performance_security", "Performance and security")]
+
+
+def seed_course_corpus(db: Session) -> int:
+    """Index published lessons as a RAG dataset so the AI mentor can ground answers and cite lessons."""
+    ds = _upsert(db, RagDataset, {"slug": "course-content"}, {
+        "name": "AgentForge lessons", "owner_id": None, "is_public": True,
+        "description": "The published lessons of this academy. The AI mentor retrieves from it to ground and cite its answers."})
+    lessons = db.scalars(select(Lesson).where(Lesson.status == "published")).all()
+    keep = set()
+    for lesson in lessons:
+        if lesson.published_version is None:
+            continue
+        s = lesson.published_version.content.get("sections", {})
+        parts = [f"# {lesson.title}", lesson.summary]
+        for key, heading in LESSON_PARTS:
+            if s.get(key):
+                parts.append(f"## {heading}\n{s[key]}")
+        if s.get("common_mistakes"):
+            parts.append("## Common mistakes\n" + "\n".join(f"- {m['mistake']} Fix: {m['fix']}" for m in s["common_mistakes"]))
+        text = "\n\n".join(parts)
+        h = hashlib.sha256(text.encode()).hexdigest()
+        doc = db.scalar(select(RagDocument).where(RagDocument.dataset_id == ds.id, RagDocument.source == lesson.slug))
+        if doc is None:
+            db.add(RagDocument(dataset_id=ds.id, title=lesson.title, source=lesson.slug, mime="text/markdown", text=text,
+                               content_hash=h, allowed_groups=["everyone"]))
+        elif doc.content_hash != h:
+            doc.title, doc.text, doc.content_hash = lesson.title, text, h
+        keep.add(lesson.slug)
+    for doc in db.scalars(select(RagDocument).where(RagDocument.dataset_id == ds.id)).all():
+        if doc.source not in keep:
+            db.delete(doc)
+    db.flush()
+    return len(keep)
+
+
 # ------------------------------------------------------------------ accounts
 
 def seed_users(db: Session) -> list[str]:
@@ -283,7 +416,9 @@ def seed_all(db: Session, with_users: bool = True, with_agent_runs: bool = True)
     seed_roles(db)
     seed_platform(db)
     out: dict[str, Any] = {"curriculum": seed_curriculum(db), "challenges": seed_challenges(db),
-                           "agents": seed_agents(db, with_runs=with_agent_runs)}
+                           "agents": seed_agents(db, with_runs=with_agent_runs), "prompts": seed_prompts(db), "rag": seed_rag(db),
+                           "interview_questions": seed_interviews(db)}
+    out["course_corpus"] = seed_course_corpus(db)
     if with_users:
         out["users_created"] = seed_users(db)
     db.commit()

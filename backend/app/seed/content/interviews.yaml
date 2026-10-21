@@ -1,0 +1,995 @@
+# Interview Arena question bank.
+# key_points: what a strong answer covers. Each point lists alternative phrasings; the transparent rubric checks
+# whether any phrasing appears. Feedback is practice guidance only - it never predicts a hiring outcome.
+tracks:
+  javascript:
+    title: "JavaScript"
+    questions:
+      - difficulty: beginner
+        prompt: "What is the difference between `let`, `const` and `var`?"
+        concise: "`var` is function-scoped and hoisted with `undefined`; `let` and `const` are block-scoped and in the temporal dead zone until declared. `const` prevents reassignment, not mutation."
+        explanation: "Scope and hoisting explain most surprises. `var` leaks out of blocks and creates one binding per function, which is why closures in `for (var ...)` loops share a value. `const` only freezes the binding; objects it points to can still change."
+        example: "const user = { name: 'Ada' }; user.name = 'Grace'; // allowed\nuser = {}; // TypeError"
+        follow_ups: ["What is the temporal dead zone?", "How would you make an object truly immutable?"]
+        mistakes: ["Saying const makes objects immutable", "Forgetting that var is function-scoped"]
+        key_points:
+          - [block scope, block-scoped]
+          - [function scope, function-scoped]
+          - [hoist]
+          - [reassign]
+          - [temporal dead zone, tdz]
+      - difficulty: intermediate
+        prompt: "Explain the event loop. In what order do microtasks and macrotasks run?"
+        concise: "JavaScript runs one task at a time on a call stack. After each macrotask (timers, I/O, events) the engine drains the whole microtask queue (promise callbacks, queueMicrotask) before rendering or taking the next macrotask."
+        explanation: "That's why `Promise.resolve().then(...)` runs before `setTimeout(..., 0)`, and why a long chain of microtasks can starve rendering. Async/await continuations are microtasks too."
+        example: "setTimeout(() => log('T'));\nPromise.resolve().then(() => log('P'));\nlog('S'); // S, P, T"
+        follow_ups: ["What happens to the UI if a microtask queue never empties?", "Where does requestAnimationFrame fit?"]
+        mistakes: ["Treating setTimeout 0 as immediate", "Thinking async functions run on another thread"]
+        key_points:
+          - [call stack, stack]
+          - [microtask]
+          - [macrotask, task queue, callback queue]
+          - [promise, then, await]
+          - [settimeout, timer]
+      - difficulty: intermediate
+        prompt: "What is a closure, and where have you used one in real code?"
+        concise: "A closure is a function plus the variables in scope where it was created; it keeps access to them after the outer function returns."
+        explanation: "Closures capture bindings, not values. They power module privacy, memoisation, middleware factories and React hooks - and cause stale-state bugs when a callback keeps an old binding."
+        example: "function counter() { let n = 0; return () => ++n; }"
+        follow_ups: ["How do closures cause memory leaks?", "What is a stale closure in React?"]
+        mistakes: ["Saying closures copy values", "No concrete example"]
+        key_points:
+          - [scope, lexical]
+          - [after the outer function returns, outer function, returned]
+          - [binding, reference]
+          - [private, encapsulat, memoiz, middleware, hook]
+      - difficulty: advanced
+        prompt: "How would you debounce an API call in a search box, and why?"
+        concise: "Wrap the handler so it only fires after the user stops typing for N milliseconds, cancelling the pending timer on each keystroke; also cancel stale requests with AbortController."
+        explanation: "Debouncing cuts request volume and avoids race conditions where an older response overwrites a newer one. Throttling is different - it limits frequency during continuous input."
+        example: "let t; input.oninput = e => { clearTimeout(t); t = setTimeout(() => search(e.target.value), 300); };"
+        follow_ups: ["Debounce vs throttle - when do you choose each?", "How do you avoid out-of-order responses?"]
+        mistakes: ["Confusing debounce with throttle", "Ignoring stale responses"]
+        key_points:
+          - [cleartimeout, cancel the timer, reset the timer]
+          - [settimeout, delay, wait]
+          - [abortcontroller, cancel the request, stale response, race condition, out of order]
+          - [throttle]
+  typescript:
+    title: "TypeScript"
+    questions:
+      - difficulty: beginner
+        prompt: "What is the difference between `interface` and `type`?"
+        concise: "Both describe object shapes. Interfaces can be merged and extended with `extends`; type aliases can also name unions, intersections, tuples and mapped types."
+        explanation: "For public object contracts many teams prefer interfaces (declaration merging, clearer errors); for unions and computed types you need `type`."
+        example: "type Result = { ok: true; value: string } | { ok: false; error: string };"
+        follow_ups: ["What is declaration merging used for?", "When does it matter for library authors?"]
+        mistakes: ["Claiming interfaces are faster at runtime", "Saying types can't be extended"]
+        key_points:
+          - [union]
+          - [declaration merging, merge]
+          - [extends, extend]
+          - [intersection, mapped]
+      - difficulty: intermediate
+        prompt: "Explain generics with an example from an API client."
+        concise: "Generics let a function or type work over many types while preserving the relationship between input and output types, e.g. `get<T>(url): Promise<T>`."
+        explanation: "Without generics you'd return `any` and lose type safety. Constraints (`T extends ...`) restrict what callers may pass."
+        example: "async function get<T>(url: string): Promise<T> { return (await fetch(url)).json(); }"
+        follow_ups: ["Why is `get<T>` still unsafe at runtime?", "How would you validate the response?"]
+        mistakes: ["Using any", "Forgetting that types vanish at runtime"]
+        key_points:
+          - [type parameter, <t>, generic]
+          - [preserve, relationship, reuse]
+          - [constraint, extends]
+          - [runtime, validate, zod, schema]
+      - difficulty: intermediate
+        prompt: "How do `unknown` and `any` differ, and which should an API boundary use?"
+        concise: "`any` turns off type checking; `unknown` accepts anything but forces you to narrow before use. Boundaries (JSON, user input) should use `unknown` and validate."
+        explanation: "`unknown` makes unsafe assumptions explicit. Pair it with a runtime validator so the static type matches reality."
+        example: "const data: unknown = await res.json(); if (isUser(data)) { ... }"
+        follow_ups: ["What is a type guard?", "How does `never` relate?"]
+        mistakes: ["Casting with as instead of validating"]
+        key_points:
+          - [narrow, type guard, typeof, instanceof]
+          - [turns off, disables, no checking]
+          - [validate, runtime]
+      - difficulty: advanced
+        prompt: "Design a type that makes some fields of a model optional for PATCH requests."
+        concise: "Use utility types: `type Patch = Partial<Pick<User, 'name' | 'email'>>` - or `Partial<Omit<User, 'id'>>` so ids can't be patched."
+        explanation: "Mapped and utility types derive request models from one source of truth, so a renamed field breaks the build instead of production."
+        example: "type UserPatch = Partial<Omit<User, 'id' | 'createdAt'>>;"
+        follow_ups: ["How would you require at least one field?", "How do you keep this in sync with the backend schema?"]
+        mistakes: ["Duplicating the model by hand"]
+        key_points:
+          - [partial]
+          - [pick, omit]
+          - [mapped type, utility type]
+          - [single source of truth, derive]
+  react:
+    title: "React"
+    questions:
+      - difficulty: beginner
+        prompt: "Why does React need a `key` on list items?"
+        concise: "Keys let React match elements between renders so it can keep state and DOM for the same item. Use stable ids, not array indexes, when the list can reorder."
+        explanation: "With index keys, inserting at the top makes React reuse the wrong component instances, so input state and focus move to the wrong rows."
+        example: "{todos.map(t => <Todo key={t.id} todo={t} />)}"
+        follow_ups: ["When is an index key acceptable?", "What happens if two items share a key?"]
+        mistakes: ["Using Math.random() as a key", "Using indexes in sortable lists"]
+        key_points:
+          - [identity, match, reconcil]
+          - [stable, id]
+          - [index]
+          - [state]
+      - difficulty: intermediate
+        prompt: "When should you use `useEffect`, and when should you not?"
+        concise: "Use effects to synchronise with something outside React (subscriptions, timers, imperative APIs). Don't use them to derive state from props or to handle user events - compute during render or in the handler."
+        explanation: "Unneeded effects cause extra renders and stale data bugs. Data fetching is better handled by a library like TanStack Query with caching and cancellation."
+        example: "useEffect(() => { const id = setInterval(tick, 1000); return () => clearInterval(id); }, []);"
+        follow_ups: ["Why does StrictMode run effects twice in development?", "How do you avoid race conditions in fetching?"]
+        mistakes: ["Returning a non-function from an effect", "Missing dependencies"]
+        key_points:
+          - [external, outside react, synchroni, subscription]
+          - [cleanup, return a function, return () =>]
+          - [derive, during render, compute]
+          - [dependenc]
+      - difficulty: intermediate
+        prompt: "How would you find and fix a slow React page?"
+        concise: "Measure with the React Profiler and browser performance tools, find components that re-render too often or do heavy work, then fix with memoisation, splitting state, virtualising long lists, or moving work off the render path."
+        explanation: "Guessing leads to `useMemo` everywhere. Profile first; most wins come from smaller state, stable props and list virtualisation."
+        example: "Profiler shows <Row> rendering 5,000 times per keystroke -> virtualise with react-window and memo the row."
+        follow_ups: ["When does React.memo not help?", "How does code splitting affect performance?"]
+        mistakes: ["Memoising without measuring"]
+        key_points:
+          - [profiler, measure, profile]
+          - [re-render, rerender]
+          - [memo, usememo, usecallback]
+          - [virtual, windowing, react-window]
+      - difficulty: advanced
+        prompt: "Where should server data live in a React app - component state, Redux, or a query cache?"
+        concise: "Server data belongs in a cache designed for it (TanStack Query, RTK Query, SWR) that handles fetching, caching, invalidation and retries. Keep Redux or context for genuinely client-only state."
+        explanation: "Treating server data as client state duplicates the backend, goes stale, and requires hand-written loading and error logic."
+        example: "const { data } = useQuery({ queryKey: ['user', id], queryFn: () => api.user(id) });"
+        follow_ups: ["How do you invalidate after a mutation?", "What about optimistic updates?"]
+        mistakes: ["Copying API responses into Redux by default"]
+        key_points:
+          - [cache, query cache, tanstack, react query, swr, rtk query]
+          - [invalidat, stale]
+          - [client state, ui state]
+          - [retry, loading, error]
+  angular:
+    title: "Angular"
+    questions:
+      - difficulty: beginner
+        prompt: "What does Angular dependency injection give you?"
+        concise: "The injector creates and provides services to components, so classes depend on abstractions, share singletons at the right scope and can be swapped in tests."
+        explanation: "Providers at root give app-wide singletons; providers on a component give each instance its own copy. The `inject()` function works in constructors and field initialisers."
+        example: "@Injectable({ providedIn: 'root' }) export class ApiService {}"
+        follow_ups: ["What is the difference between root and component providers?", "How do you mock a service in tests?"]
+        mistakes: ["Creating services with new"]
+        key_points:
+          - [injector, provider]
+          - [singleton, scope]
+          - [test, mock]
+          - [decoupl, abstraction]
+      - difficulty: intermediate
+        prompt: "Signals vs RxJS observables - when would you use each?"
+        concise: "Signals hold synchronous state with fine-grained change tracking (ideal for component state and derived values); observables model streams of events over time (HTTP, websockets, debounced input)."
+        explanation: "Angular's interop (`toSignal`, `toObservable`) lets you use observables at the edges and signals in templates."
+        example: "count = signal(0); double = computed(() => this.count() * 2);"
+        follow_ups: ["How do signals change change detection?", "When would you still use the async pipe?"]
+        mistakes: ["Rewriting every stream as signals"]
+        key_points:
+          - [signal]
+          - [stream, over time, event]
+          - [computed, derived]
+          - [tosignal, interop]
+      - difficulty: intermediate
+        prompt: "What do HTTP interceptors do, and what would you put in one?"
+        concise: "Interceptors wrap every HttpClient request and response - good for auth headers, CSRF tokens, retries, logging and global error handling."
+        explanation: "Keep them small and ordered deliberately; an interceptor that swallows errors hides problems from callers."
+        example: "export const authInterceptor: HttpInterceptorFn = (req, next) => next(req.clone({ setHeaders: { Authorization: token } }));"
+        follow_ups: ["How do you avoid retrying non-idempotent requests?", "How do you refresh expired tokens?"]
+        mistakes: ["Retrying POST requests blindly"]
+        key_points:
+          - [every request, all requests, wrap]
+          - [header, auth, token]
+          - [error, retry]
+      - difficulty: advanced
+        prompt: "How does OnPush change detection work, and what can break it?"
+        concise: "OnPush components re-render only when an input reference changes, an event fires inside them, an async pipe/signal emits, or you mark them for check. Mutating input objects in place breaks it."
+        explanation: "Immutable updates and signals make OnPush predictable and fast; mutation leaves stale views."
+        example: "this.items = [...this.items, item]; // new reference triggers OnPush"
+        follow_ups: ["What is markForCheck vs detectChanges?", "How do signals interact with zoneless Angular?"]
+        mistakes: ["Mutating arrays passed as inputs"]
+        key_points:
+          - [input reference, reference changes, new reference]
+          - [mutat, immutable]
+          - [markforcheck, mark for check]
+          - [async pipe, signal]
+  nodejs:
+    title: "Node.js"
+    questions:
+      - difficulty: beginner
+        prompt: "Why shouldn't you run CPU-heavy work on the Node.js main thread?"
+        concise: "Node runs JavaScript on a single event-loop thread; CPU-heavy work blocks every other request. Move it to worker threads, a queue with separate workers, or a different service."
+        explanation: "I/O is non-blocking thanks to libuv, but your JS isn't. A 200 ms loop adds 200 ms latency to every concurrent request."
+        example: "new Worker('./resize.js', { workerData: file })"
+        follow_ups: ["When would you use a job queue instead of worker threads?", "How do you detect event-loop lag?"]
+        mistakes: ["Assuming async makes CPU work non-blocking"]
+        key_points:
+          - [single thread, event loop, single-threaded]
+          - [block]
+          - [worker thread, worker_threads, worker]
+          - [queue]
+      - difficulty: intermediate
+        prompt: "How would you design authentication for a Node.js API used by a web app?"
+        concise: "Use server-side sessions or short-lived tokens in HttpOnly, Secure, SameSite cookies, hash passwords with Argon2/bcrypt, protect against CSRF, rate-limit login, and validate every request on the server."
+        explanation: "Storing JWTs in localStorage exposes them to XSS. Whatever the token type, revocation, rotation and expiry matter more than the format."
+        example: "res.cookie('sid', token, { httpOnly: true, secure: true, sameSite: 'lax' })"
+        follow_ups: ["JWT vs sessions - trade-offs?", "How do you revoke a JWT?"]
+        mistakes: ["Storing tokens in localStorage", "No rate limiting on login"]
+        key_points:
+          - [httponly]
+          - [hash, bcrypt, argon2]
+          - [csrf]
+          - [rate limit, rate-limit, brute force]
+          - [expir, revoc, rotate]
+      - difficulty: intermediate
+        prompt: "What are streams and when would you use them?"
+        concise: "Streams process data in chunks with backpressure, so you can handle large files or responses with constant memory instead of loading everything at once."
+        explanation: "`pipeline()` wires streams together with proper error handling and cleanup."
+        example: "await pipeline(fs.createReadStream('big.csv'), parse(), transform, fs.createWriteStream('out.csv'))"
+        follow_ups: ["What is backpressure?", "Why prefer pipeline over pipe?"]
+        mistakes: ["Reading whole files into memory"]
+        key_points:
+          - [chunk]
+          - [backpressure]
+          - [memory]
+          - [pipeline, pipe]
+      - difficulty: advanced
+        prompt: "How do you make a payment-style POST endpoint safe to retry?"
+        concise: "Require an Idempotency-Key header, store the key with the request hash and result atomically, and return the stored result for repeats; reject the same key with a different body."
+        explanation: "Networks and clients retry. Without idempotency a timeout plus retry can charge a customer twice."
+        example: "INSERT INTO idempotency (key, request_hash, response) ... ON CONFLICT (key) DO NOTHING"
+        follow_ups: ["How long do you keep keys?", "What if two requests with the same key arrive at once?"]
+        mistakes: ["Relying on the client never retrying"]
+        key_points:
+          - [idempotency key, idempotency-key, idempotent]
+          - [store, persist, database]
+          - [same result, return the stored, replay]
+          - [unique, conflict, atomic, lock]
+  python:
+    title: "Python"
+    questions:
+      - difficulty: beginner
+        prompt: "What is a generator and why would you use one?"
+        concise: "A function with `yield` returns a lazy iterator that produces values on demand, so you can process large or infinite sequences with constant memory."
+        explanation: "Generator pipelines read like Unix pipes and only pull what the consumer needs."
+        example: "def lines(path):\n    with open(path) as f:\n        for line in f:\n            yield line.rstrip()"
+        follow_ups: ["What happens when a generator is exhausted?", "What does yield from do?"]
+        mistakes: ["Iterating a generator twice expecting data"]
+        key_points:
+          - [yield]
+          - [lazy, on demand]
+          - [memory]
+          - [iterator]
+      - difficulty: intermediate
+        prompt: "Explain the GIL and its effect on threads."
+        concise: "In CPython the GIL lets only one thread execute Python bytecode at a time, so threads help I/O-bound work but not CPU-bound work; use multiprocessing, native extensions or async for those cases."
+        explanation: "Many C extensions (NumPy) release the GIL. Free-threaded CPython builds exist experimentally from 3.13."
+        example: "ThreadPoolExecutor for many HTTP calls; ProcessPoolExecutor for image resizing."
+        follow_ups: ["When is asyncio better than threads?", "What changes with free-threaded Python?"]
+        mistakes: ["Saying Python can't run anything in parallel"]
+        key_points:
+          - [one thread, single thread, bytecode]
+          - [i/o-bound, io-bound, i/o bound]
+          - [cpu-bound, cpu bound]
+          - [multiprocessing, process]
+      - difficulty: intermediate
+        prompt: "What are decorators? Write one that times a function."
+        concise: "A decorator is a callable that takes a function and returns a wrapped function, applied with `@`. Use functools.wraps to keep the name and docstring."
+        explanation: "Decorators implement cross-cutting concerns - logging, retries, caching, auth checks - without editing each function."
+        example: "def timed(fn):\n    @functools.wraps(fn)\n    def inner(*a, **k):\n        t = time.perf_counter(); r = fn(*a, **k)\n        print(fn.__name__, time.perf_counter() - t); return r\n    return inner"
+        follow_ups: ["How do you write a decorator that takes arguments?", "How do decorators work with async functions?"]
+        mistakes: ["Forgetting functools.wraps"]
+        key_points:
+          - [wrap, returns a function]
+          - [functools.wraps, wraps]
+          - ["@"]
+          - [logging, retry, cach, cross-cutting]
+      - difficulty: advanced
+        prompt: "How do you handle many concurrent HTTP calls in Python efficiently and safely?"
+        concise: "Use asyncio with an async client (httpx/aiohttp), limit concurrency with a semaphore, set timeouts, retry with backoff, and handle partial failures with gather(return_exceptions=True) or TaskGroup."
+        explanation: "Unbounded concurrency overwhelms the remote service and your own sockets; timeouts prevent one slow call from hanging everything."
+        example: "sem = asyncio.Semaphore(20)\nasync def get(u):\n    async with sem: return await client.get(u, timeout=5)"
+        follow_ups: ["TaskGroup vs gather?", "How do you respect rate limits?"]
+        mistakes: ["No timeout", "Unbounded concurrency"]
+        key_points:
+          - [asyncio, async]
+          - [semaphore, limit concurrency]
+          - [timeout]
+          - [retry, backoff]
+  fastapi:
+    title: "FastAPI"
+    questions:
+      - difficulty: beginner
+        prompt: "What does FastAPI's dependency injection system give you?"
+        concise: "`Depends()` declares reusable providers (DB sessions, current user, settings) that FastAPI resolves per request, caches within the request, and that tests can override."
+        explanation: "Dependencies with `yield` handle setup and teardown, such as opening and closing a database session."
+        example: "def get_db():\n    db = Session()\n    try: yield db\n    finally: db.close()"
+        follow_ups: ["How do you override dependencies in tests?", "What runs after the response with yield dependencies?"]
+        mistakes: ["Creating a DB session globally"]
+        key_points:
+          - [depends]
+          - [per request, request]
+          - [yield, cleanup, teardown]
+          - [override, test]
+      - difficulty: intermediate
+        prompt: "When should an endpoint be `async def` versus `def`?"
+        concise: "Use `async def` when everything inside awaits non-blocking I/O; use `def` for blocking libraries (many DB drivers, file I/O) so FastAPI runs them in a threadpool instead of blocking the event loop."
+        explanation: "Calling a blocking function inside `async def` stalls every request on that worker."
+        example: "async def get(): return await client.get(url)  # ok\ndef report(): return slow_sync_query()  # threadpool"
+        follow_ups: ["How do you run blocking code from async code?", "What about CPU-heavy work?"]
+        mistakes: ["Blocking calls inside async def"]
+        key_points:
+          - [event loop]
+          - [block]
+          - [threadpool, thread pool]
+          - [await]
+      - difficulty: intermediate
+        prompt: "How do you validate input and return consistent errors in FastAPI?"
+        concise: "Use Pydantic models for bodies and query params, constrain fields (lengths, patterns, ranges), and register exception handlers that return one error envelope with a code, message and trace id."
+        explanation: "Consistent errors make clients simpler and logs searchable; never leak stack traces."
+        example: "class SignUp(BaseModel):\n    email: EmailStr\n    password: str = Field(min_length=10)"
+        follow_ups: ["How do you version response models?", "How would you document error responses in OpenAPI?"]
+        mistakes: ["Returning raw exception messages"]
+        key_points:
+          - [pydantic, model]
+          - [field, constraint, min_length]
+          - [exception handler, error envelope, consistent]
+          - [trace id, request id, correlation]
+      - difficulty: advanced
+        prompt: "How would you deploy a FastAPI service for production?"
+        concise: "Run uvicorn workers behind a reverse proxy or load balancer in containers, configure via environment and secrets, run migrations separately, add health checks, structured logs, metrics, and autoscaling."
+        explanation: "Separate liveness from readiness, keep workers stateless, and set timeouts at every layer."
+        example: "ECS service with 2+ tasks, ALB health check on /healthz, Alembic migration task before rollout."
+        follow_ups: ["How many workers per container?", "How do you do zero-downtime migrations?"]
+        mistakes: ["Running migrations from every replica at start"]
+        key_points:
+          - [uvicorn, gunicorn, worker]
+          - [container, docker]
+          - [health check, healthz, readiness, liveness]
+          - [migration]
+          - [log, metric, observab]
+  postgresql:
+    title: "PostgreSQL"
+    questions:
+      - difficulty: beginner
+        prompt: "What is an index and when doesn't it help?"
+        concise: "An index (usually a B-tree) lets the planner find rows without scanning the whole table. It doesn't help for low-selectivity filters, functions on the column, leading-wildcard LIKE, or tiny tables, and it slows writes."
+        explanation: "Check with EXPLAIN ANALYZE rather than guessing."
+        example: "CREATE INDEX ON orders (customer_id, created_at DESC);"
+        follow_ups: ["What is a composite index's column order rule?", "What is an index-only scan?"]
+        mistakes: ["Indexing every column"]
+        key_points:
+          - [b-tree, btree]
+          - [selectiv]
+          - [write, insert]
+          - [explain]
+      - difficulty: intermediate
+        prompt: "Explain transaction isolation levels and a bug each prevents."
+        concise: "Read Committed (default) prevents dirty reads; Repeatable Read gives a stable snapshot; Serializable prevents write skew by aborting conflicting transactions, which callers must retry."
+        explanation: "Many lost-update bugs come from read-modify-write in Read Committed; fix with SELECT ... FOR UPDATE, atomic UPDATEs or Serializable with retries."
+        example: "UPDATE accounts SET balance = balance - 10 WHERE id = 1 AND balance >= 10;"
+        follow_ups: ["What is write skew?", "How do you retry serialization failures?"]
+        mistakes: ["Assuming transactions alone prevent lost updates"]
+        key_points:
+          - [read committed]
+          - [repeatable read, snapshot]
+          - [serializable]
+          - [lost update, write skew, dirty read]
+          - [for update, retry]
+      - difficulty: intermediate
+        prompt: "How do you run a schema migration on a large table without downtime?"
+        concise: "Expand and contract - add nullable columns, backfill in batches, deploy code that writes both, add constraints with NOT VALID then VALIDATE, create indexes CONCURRENTLY, and only then remove old columns."
+        explanation: "Long locks on hot tables cause outages; break the change into backward-compatible steps."
+        example: "CREATE INDEX CONCURRENTLY ix_orders_status ON orders(status);"
+        follow_ups: ["Why can adding a column with a default be slow on old versions?", "How do you roll back?"]
+        mistakes: ["Locking the table with a single ALTER"]
+        key_points:
+          - [expand, contract, backward compatible]
+          - [concurrently]
+          - [batch, backfill]
+          - [lock]
+      - difficulty: advanced
+        prompt: "How would you add vector search to an existing PostgreSQL app?"
+        concise: "Install pgvector, add a vector column, build an HNSW (or IVFFlat) index with the right distance operator, filter by tenant/permissions in the same query, and combine with full-text search for hybrid retrieval."
+        explanation: "Keeping vectors next to relational data makes permission filters and joins easy; measure recall vs latency when tuning index parameters."
+        example: "SELECT id FROM chunks WHERE tenant_id = $1 ORDER BY embedding <=> $2 LIMIT 5;"
+        follow_ups: ["HNSW vs IVFFlat?", "When would you move to a dedicated vector database?"]
+        mistakes: ["Filtering permissions after retrieval"]
+        key_points:
+          - [pgvector]
+          - [hnsw, ivfflat]
+          - [filter, tenant, permission]
+          - [hybrid, full-text, bm25]
+  mysql:
+    title: "MySQL"
+    questions:
+      - difficulty: beginner
+        prompt: "What is the difference between InnoDB and MyISAM?"
+        concise: "InnoDB supports transactions, row-level locking, foreign keys and crash recovery and is the default; MyISAM has table-level locks and no transactions."
+        explanation: "There's rarely a reason to choose MyISAM for new systems."
+        example: "ALTER TABLE logs ENGINE=InnoDB;"
+        follow_ups: ["What is the clustered index in InnoDB?", "How does row locking work?"]
+        mistakes: ["Choosing MyISAM for write-heavy tables"]
+        key_points:
+          - [transaction]
+          - [row-level, row level]
+          - [foreign key]
+          - [crash recovery, durab]
+      - difficulty: intermediate
+        prompt: "Why does the primary key choice matter more in InnoDB than in many databases?"
+        concise: "InnoDB stores rows in a clustered index ordered by the primary key, and secondary indexes store the primary key. Random UUID keys cause page splits and large secondary indexes; sequential keys are cheaper."
+        explanation: "Use auto-increment or time-ordered UUIDs (v7) when insert performance matters."
+        example: "id BINARY(16) storing UUIDv7 keeps inserts mostly sequential."
+        follow_ups: ["What are UUIDv7s?", "How does this affect range scans?"]
+        mistakes: ["Using random UUID strings as primary keys without thought"]
+        key_points:
+          - [clustered]
+          - [secondary index]
+          - [random, page split, fragment]
+          - [sequential, auto-increment, uuidv7, v7]
+      - difficulty: intermediate
+        prompt: "How would you investigate a slow query in MySQL?"
+        concise: "Enable the slow query log, run EXPLAIN (or EXPLAIN ANALYZE in 8.0) on the query, check for full scans and filesort, and add or fix indexes; verify with production-like data."
+        explanation: "Performance Schema and sys schema views help find the worst offenders by total time."
+        example: "EXPLAIN ANALYZE SELECT ... WHERE status = 'paid' ORDER BY created_at DESC LIMIT 20;"
+        follow_ups: ["What does Using filesort mean?", "How do covering indexes help?"]
+        mistakes: ["Optimising queries that aren't actually slow"]
+        key_points:
+          - [slow query log]
+          - [explain]
+          - [index]
+          - [full scan, filesort]
+      - difficulty: advanced
+        prompt: "How does MySQL replication work and what can go wrong?"
+        concise: "The primary writes changes to the binary log; replicas pull and apply them. Asynchronous replication can lag and lose recent writes on failover; reading from replicas can return stale data."
+        explanation: "Use GTIDs for safer failover, monitor lag, and route read-your-writes requests to the primary."
+        example: "SHOW REPLICA STATUS\\G -- Seconds_Behind_Source"
+        follow_ups: ["Semi-synchronous replication?", "How do you handle read-after-write consistency?"]
+        mistakes: ["Assuming replicas are always current"]
+        key_points:
+          - [binary log, binlog]
+          - [lag, stale]
+          - [failover]
+          - [gtid, semi-sync]
+  mongodb:
+    title: "MongoDB"
+    questions:
+      - difficulty: beginner
+        prompt: "When would you embed documents versus reference them?"
+        concise: "Embed data that is read together and bounded in size (an order's line items); reference data that is shared, large, unbounded or updated independently (a customer used by many orders)."
+        explanation: "Design schemas from access patterns; unbounded arrays hit the 16 MB document limit and slow updates."
+        example: "{ _id, items: [{ sku, qty }], customer_id }"
+        follow_ups: ["What is the 16 MB limit?", "How do you join with $lookup?"]
+        mistakes: ["Modelling relationally by default"]
+        key_points:
+          - [embed]
+          - [reference]
+          - [access pattern, read together]
+          - [unbounded, 16 mb, size]
+      - difficulty: intermediate
+        prompt: "How do indexes work in MongoDB and what is the ESR rule?"
+        concise: "MongoDB uses B-tree indexes; for compound indexes order fields as Equality, Sort, Range so one index can filter and sort efficiently."
+        explanation: "Check plans with explain('executionStats') and watch for COLLSCAN."
+        example: "db.orders.createIndex({ status: 1, created_at: -1, total: 1 })"
+        follow_ups: ["What is a covered query?", "How do partial indexes help?"]
+        mistakes: ["Creating many single-field indexes"]
+        key_points:
+          - [compound]
+          - [equality]
+          - [sort]
+          - [range]
+          - [explain, collscan]
+      - difficulty: intermediate
+        prompt: "Does MongoDB support transactions? When would you use them?"
+        concise: "Yes, multi-document ACID transactions on replica sets and sharded clusters. Prefer single-document atomic updates through good schema design and use transactions for genuine multi-document invariants."
+        explanation: "Transactions add latency and have time limits; retry on transient errors."
+        example: "session.withTransaction(async () => { ... })"
+        follow_ups: ["What is write concern majority?", "What are transient transaction errors?"]
+        mistakes: ["Using transactions to paper over a poor schema"]
+        key_points:
+          - [acid, multi-document]
+          - [single-document, atomic]
+          - [replica set]
+          - [retry]
+      - difficulty: advanced
+        prompt: "How do you choose a shard key?"
+        concise: "Pick a key with high cardinality, even write distribution and good query isolation (most queries include it). Avoid monotonically increasing keys that send all inserts to one shard."
+        explanation: "A bad shard key is expensive to change; hashed keys spread writes but make range queries scatter-gather."
+        example: "{ tenant_id: 1, _id: 1 } for a multi-tenant SaaS"
+        follow_ups: ["Hashed vs ranged sharding?", "What is a jumbo chunk?"]
+        mistakes: ["Sharding on a timestamp"]
+        key_points:
+          - [cardinality]
+          - [distribution, hotspot, even]
+          - [monoton, timestamp, increasing]
+          - [query, targeted, scatter]
+  aws:
+    title: "AWS"
+    questions:
+      - difficulty: beginner
+        prompt: "What is least privilege in IAM and how do you apply it?"
+        concise: "Grant only the actions and resources a principal needs, using roles (not long-lived keys), scoped policies, conditions and regular access reviews."
+        explanation: "Start narrow and widen with evidence (IAM Access Analyzer, CloudTrail) rather than starting with wildcards."
+        example: "Allow s3:GetObject on arn:aws:s3:::reports-bucket/team-a/*"
+        follow_ups: ["Roles vs users?", "How do SCPs fit in?"]
+        mistakes: ["Using Action: \"*\" for convenience"]
+        key_points:
+          - [only the permissions, minimum, least]
+          - [role]
+          - [resource, scope]
+          - [review, access analyzer, cloudtrail]
+      - difficulty: intermediate
+        prompt: "Lambda or ECS Fargate for a new API - how do you decide?"
+        concise: "Lambda suits spiky, short, event-driven work with no servers to manage; Fargate suits steady traffic, long requests, streaming, connection pooling and containers you already have."
+        explanation: "Consider cold starts, max duration, concurrency limits, cost at steady load, and database connection management (RDS Proxy for Lambda)."
+        example: "Webhook handler -> Lambda; SSE agent service -> Fargate behind an ALB."
+        follow_ups: ["How do cold starts matter?", "When is EC2 cheaper?"]
+        mistakes: ["Ignoring database connection limits with Lambda"]
+        key_points:
+          - [cold start]
+          - [duration, timeout, long-running]
+          - [steady, spiky, traffic]
+          - [connection, rds proxy]
+          - [cost]
+      - difficulty: intermediate
+        prompt: "How do you store and use secrets in AWS?"
+        concise: "Keep them in Secrets Manager or SSM Parameter Store (KMS-encrypted), grant read access via task/function roles, inject at runtime, rotate regularly, and never bake them into images or code."
+        explanation: "Audit access with CloudTrail; use separate secrets per environment."
+        example: "ECS task definition secrets: valueFrom arn:aws:secretsmanager:..."
+        follow_ups: ["Secrets Manager vs Parameter Store?", "How does rotation work for RDS?"]
+        mistakes: ["Plain environment variables in source control"]
+        key_points:
+          - [secrets manager, parameter store, ssm]
+          - [kms, encrypt]
+          - [role]
+          - [rotat]
+      - difficulty: advanced
+        prompt: "Design a VPC for a web app with a database and an untrusted code runner."
+        concise: "Public subnets for the load balancer, private subnets for app tasks, isolated subnets for the database and for the code runner with no NAT route, security groups allowing only required flows, and VPC endpoints for AWS APIs."
+        explanation: "The runner must not reach the internet, the metadata service or the database; defence in depth via network, IAM (no task role) and container hardening."
+        example: "sg-runner: inbound 8080 from sg-api only; no outbound to 0.0.0.0/0"
+        follow_ups: ["How do VPC endpoints reduce cost and risk?", "Multi-AZ considerations?"]
+        mistakes: ["Putting the database in a public subnet"]
+        key_points:
+          - [public subnet]
+          - [private subnet]
+          - [nat]
+          - [security group]
+          - [isolat]
+  devops:
+    title: "DevOps"
+    questions:
+      - difficulty: beginner
+        prompt: "What should a CI pipeline for a web service run?"
+        concise: "Lint, type checks, unit and integration tests, a security scan, build the artefact once, and run migrations and end-to-end tests against an ephemeral environment before deploy."
+        explanation: "Fast feedback first; build once and promote the same artefact through environments."
+        example: "GitHub Actions: lint -> test (with Postgres service) -> build image -> e2e -> deploy"
+        follow_ups: ["How do you keep CI fast?", "What is a flaky test and how do you handle it?"]
+        mistakes: ["Rebuilding artefacts per environment"]
+        key_points:
+          - [lint]
+          - [test]
+          - [build once, artifact, artefact, image]
+          - [scan, security, dependenc]
+      - difficulty: intermediate
+        prompt: "Blue/green vs rolling vs canary deploys - trade-offs?"
+        concise: "Rolling replaces instances gradually (cheap, mixed versions); blue/green switches traffic between two full environments (fast rollback, double cost); canary sends a small share of traffic first and expands on healthy metrics."
+        explanation: "All require backward-compatible database changes during the overlap."
+        example: "Canary 5% for 15 minutes gated on error rate and p95 latency."
+        follow_ups: ["How do you automate rollback?", "How do feature flags help?"]
+        mistakes: ["Ignoring schema compatibility"]
+        key_points:
+          - [rolling]
+          - [blue/green, blue-green, blue green]
+          - [canary]
+          - [rollback]
+          - [backward compatib, schema]
+      - difficulty: intermediate
+        prompt: "How do you decide what to alert on?"
+        concise: "Alert on symptoms users feel (error rate, latency, availability against SLOs) and page only for actionable, urgent issues; route everything else to dashboards or tickets."
+        explanation: "Burn-rate alerts on SLO error budgets reduce noise compared with static thresholds."
+        example: "Page if 2% of the 30-day error budget burns in 1 hour."
+        follow_ups: ["What is an error budget?", "How do you reduce alert fatigue?"]
+        mistakes: ["Paging on CPU usage"]
+        key_points:
+          - [symptom, user]
+          - [slo, sli, error budget]
+          - [actionable]
+          - [fatigue, noise]
+      - difficulty: advanced
+        prompt: "How would you use Terraform safely in a team?"
+        concise: "Remote state with locking (S3 + DynamoDB or Terraform Cloud), modules for reuse, plan in CI on every PR, apply only from CI with reviewed plans, least-privilege credentials via OIDC, and drift detection."
+        explanation: "Separate state per environment and component to limit blast radius."
+        example: "backend \"s3\" { bucket = \"tf-state\", dynamodb_table = \"tf-locks\" }"
+        follow_ups: ["How do you handle secrets in Terraform?", "How do you import existing resources?"]
+        mistakes: ["Applying from laptops with admin keys"]
+        key_points:
+          - [remote state]
+          - [lock]
+          - [plan]
+          - [module]
+          - [oidc, least privilege, ci]
+  system-design:
+    title: "System Design"
+    questions:
+      - difficulty: intermediate
+        prompt: "Design a URL shortener."
+        concise: "An API that stores code -> URL in a key-value or relational store, generates collision-free codes (counter + base62 or random with retry), serves redirects from a cache/CDN, and counts clicks asynchronously."
+        explanation: "Reads dominate, so cache aggressively; validate URLs and block abuse; analytics go through a queue so redirects stay fast."
+        example: "GET /abc123 -> 302 Location from Redis; click event -> Kafka -> warehouse"
+        follow_ups: ["How do you prevent abuse?", "How do you shard the store?"]
+        mistakes: ["Synchronous analytics on the redirect path"]
+        key_points:
+          - [cache, cdn, redis]
+          - [base62, collision, unique]
+          - [read-heavy, reads]
+          - [queue, async]
+          - [abuse, rate limit, validat]
+      - difficulty: intermediate
+        prompt: "How would you add rate limiting to an API?"
+        concise: "Use a token bucket or sliding window per key/user/IP stored in a shared store like Redis, return 429 with Retry-After, and apply limits at the edge and per endpoint by cost."
+        explanation: "In-memory limiters break with multiple instances; atomic Redis operations or Lua scripts keep counts correct."
+        example: "INCR + EXPIRE per minute key, or a token bucket in a Lua script"
+        follow_ups: ["Fixed vs sliding windows?", "How do you rate-limit expensive LLM calls?"]
+        mistakes: ["Per-process counters behind a load balancer"]
+        key_points:
+          - [token bucket, sliding window, fixed window]
+          - [redis, shared]
+          - ["429", retry-after]
+          - [per user, per key, per ip]
+      - difficulty: advanced
+        prompt: "Design a chat assistant over a company's internal documents for 10,000 employees."
+        concise: "Ingest from sources with ACLs, chunk and embed incrementally, store in a vector index with permission metadata, retrieve with permission filters and hybrid search, rerank, generate with citations, cache, evaluate continuously, and log for audit."
+        explanation: "The hard parts are permissions, freshness and evaluation, not the model call."
+        example: "Connector sync -> chunker -> embeddings -> pgvector (acl column) -> retrieve WHERE acl && user_groups -> LLM"
+        follow_ups: ["How do you handle a revoked permission?", "How do you measure answer quality?"]
+        mistakes: ["Filtering permissions after generation"]
+        key_points:
+          - [permission, acl, access control]
+          - [chunk, embed]
+          - [vector, hybrid, rerank]
+          - [citation, ground]
+          - [evaluat, recall]
+      - difficulty: advanced
+        prompt: "How do you make a distributed workflow reliable when steps can fail midway?"
+        concise: "Make steps idempotent, persist state after each step (durable execution), retry with backoff, use timeouts, and compensate (saga) for steps that can't be rolled back."
+        explanation: "Exactly-once is achieved as at-least-once delivery plus idempotent handlers."
+        example: "Order saga: reserve stock -> charge -> ship; on charge failure release stock."
+        follow_ups: ["Orchestration vs choreography?", "How does Temporal help?"]
+        mistakes: ["Assuming distributed transactions are free"]
+        key_points:
+          - [idempot]
+          - [saga, compensat]
+          - [retry]
+          - [durable, persist, checkpoint]
+          - [at-least-once, exactly-once]
+  rag:
+    title: "RAG"
+    questions:
+      - difficulty: beginner
+        prompt: "What is retrieval-augmented generation and when is it better than fine-tuning?"
+        concise: "RAG retrieves relevant passages at query time and gives them to the model as context. Use it for knowledge that changes or must be cited and permissioned; fine-tuning changes behaviour or style, not up-to-date facts."
+        explanation: "RAG keeps knowledge updatable without retraining and lets you show sources."
+        example: "Policy Q&A: retrieve the 4 best chunks, answer with [1] citations."
+        follow_ups: ["When would you combine RAG and fine-tuning?", "What are RAG's failure modes?"]
+        mistakes: ["Fine-tuning to teach facts that change weekly"]
+        key_points:
+          - [retriev]
+          - [context]
+          - [fine-tun]
+          - [cite, citation, source]
+          - [up to date, fresh, changes]
+      - difficulty: intermediate
+        prompt: "How do you choose chunk size and overlap?"
+        concise: "Start structure-aware (headings, paragraphs) at a few hundred tokens with 10-20% overlap, then tune against a labelled retrieval eval (recall@k, MRR) rather than intuition."
+        explanation: "Too small loses context, too large dilutes similarity and wastes tokens; overlap helps answers that straddle boundaries."
+        example: "Compare 200/0, 300/50 and heading-aware chunks on 50 labelled questions."
+        follow_ups: ["What is parent-document retrieval?", "How do tables and code change chunking?"]
+        mistakes: ["Choosing a size without measuring"]
+        key_points:
+          - [structure, heading, paragraph]
+          - [overlap]
+          - [recall, mrr, eval]
+          - [context, dilut]
+      - difficulty: intermediate
+        prompt: "What is hybrid search and why does it help?"
+        concise: "Combine keyword (BM25) and vector retrieval, usually fused with reciprocal rank fusion. Keywords catch exact terms like IDs and names; vectors catch paraphrases."
+        explanation: "Each retriever fails differently; fusing ranks avoids calibrating incomparable scores."
+        example: "RRF score = Σ 1 / (60 + rank)"
+        follow_ups: ["When would you add a reranker?", "How do you weight the two retrievers?"]
+        mistakes: ["Adding raw scores from different retrievers"]
+        key_points:
+          - [bm25, keyword, lexical]
+          - [vector, semantic, embedding]
+          - [reciprocal rank fusion, rrf, fuse]
+          - [exact, paraphrase, synonym]
+      - difficulty: advanced
+        prompt: "How do you defend a RAG system against prompt injection in documents?"
+        concise: "Treat retrieved text as untrusted data, delimit it, instruct the model not to follow instructions in it, enforce permissions at retrieval, give the model no dangerous tools, require approval for side effects, and test with injection cases."
+        explanation: "Prompt-level defences reduce risk but aren't sufficient alone; limiting blast radius is what keeps you safe."
+        example: "An imported wiki page says 'ignore previous instructions' - the system prompt treats passages as data and no tool can leak secrets."
+        follow_ups: ["How do you test injection resistance?", "What about indirect injection via tool outputs?"]
+        mistakes: ["Relying only on a keyword filter"]
+        key_points:
+          - [untrusted, as data]
+          - [delimit, fence, tag]
+          - [permission, least privilege]
+          - [approval, side effect, tool]
+          - [test, eval]
+  langchain:
+    title: "LangChain"
+    questions:
+      - difficulty: beginner
+        prompt: "What does LangChain give you, and when would you skip it?"
+        concise: "Abstractions for models, prompts, retrievers, tools and output parsers with many integrations. Skip it when a few direct API calls are simpler, or when you need full control and fewer dependencies."
+        explanation: "Frameworks speed up prototypes; for a single model call with validation plain code is often clearer."
+        example: "prompt | model | parser (LCEL)"
+        follow_ups: ["What is LCEL?", "How do you keep provider lock-in low?"]
+        mistakes: ["Adding a framework for a single API call"]
+        key_points:
+          - [integration, abstraction]
+          - [prompt, retriever, tool, parser]
+          - [plain, direct, simpler]
+          - [dependenc]
+      - difficulty: intermediate
+        prompt: "How do you get reliable structured output from a model in LangChain?"
+        concise: "Use the model's native structured-output/tool-calling support (with_structured_output and a Pydantic schema), validate the result, and retry or repair on failure."
+        explanation: "Parsing free text with regex is brittle; provider-enforced schemas remove most format errors."
+        example: "model.with_structured_output(Invoice).invoke(text)"
+        follow_ups: ["What if the provider lacks JSON mode?", "How do you test it?"]
+        mistakes: ["Trusting output without validation"]
+        key_points:
+          - [with_structured_output, structured output, json schema, tool call]
+          - [pydantic, schema]
+          - [validat]
+          - [retry, repair]
+      - difficulty: intermediate
+        prompt: "How would you trace and debug a LangChain app in production?"
+        concise: "Enable tracing (LangSmith or OpenTelemetry/Langfuse), log inputs, outputs, token usage and latency per step with a trace id, and replay failing traces against fixed evaluation sets."
+        explanation: "Without traces, failures in multi-step chains are guesswork."
+        example: "LANGSMITH_TRACING=true; tag runs with release version"
+        follow_ups: ["What should you never log?", "How do traces feed evals?"]
+        mistakes: ["Logging only the final answer"]
+        key_points:
+          - [trace, langsmith, langfuse, opentelemetry]
+          - [token, latency, cost]
+          - [replay, eval]
+          - [pii, redact, sensitive]
+      - difficulty: advanced
+        prompt: "When would you move from a LangChain chain to LangGraph?"
+        concise: "When the flow needs loops, branching on intermediate results, persistent state, human-in-the-loop interrupts or durable checkpoints - things a linear chain models poorly."
+        explanation: "Keep simple pipelines as chains; use a graph when the control flow itself is the hard part."
+        example: "Agent loop: plan -> tool -> observe -> (done? end : plan) with an approval interrupt"
+        follow_ups: ["What is a checkpointer?", "How do you bound loops?"]
+        mistakes: ["Building a graph for a fixed three-step pipeline"]
+        key_points:
+          - [loop, cycle]
+          - [branch, condition]
+          - [state, checkpoint, persist]
+          - [human-in-the-loop, interrupt, approval]
+  langgraph:
+    title: "LangGraph"
+    questions:
+      - difficulty: beginner
+        prompt: "What are nodes, edges and state in LangGraph?"
+        concise: "State is a typed object passed through the graph; nodes are functions that read state and return updates; edges (including conditional edges) decide which node runs next."
+        explanation: "Reducers define how updates merge (e.g. appending messages)."
+        example: "graph.add_conditional_edges('agent', should_continue, {'tools': 'tools', 'end': END})"
+        follow_ups: ["What is a reducer?", "How do you visualise the graph?"]
+        mistakes: ["Mutating state in place"]
+        key_points:
+          - [state]
+          - [node]
+          - [edge, conditional]
+          - [reducer, update]
+      - difficulty: intermediate
+        prompt: "How does human-in-the-loop work in LangGraph?"
+        concise: "Use interrupts (interrupt() or interrupt_before) with a checkpointer; the run pauses, state is persisted, a person reviews or edits, and the run resumes from the checkpoint with their input."
+        explanation: "Put interrupts before side-effecting tool calls so a human sees the exact arguments."
+        example: "interrupt({'action': 'send_email', 'args': args})"
+        follow_ups: ["How do you resume after a server restart?", "How do you audit decisions?"]
+        mistakes: ["Approving actions without showing arguments"]
+        key_points:
+          - [interrupt]
+          - [checkpoint]
+          - [resume]
+          - [side effect, tool call, approve]
+      - difficulty: intermediate
+        prompt: "How do you stop an agent loop from running forever?"
+        concise: "Set a recursion/step limit, token and time budgets, detect repeated identical tool calls, and route to a human or a fallback when limits are hit."
+        explanation: "Budgets turn runaway cost into a clear, logged failure."
+        example: "graph.invoke(state, config={'recursion_limit': 15})"
+        follow_ups: ["How do you choose the limit?", "What do you show the user when it triggers?"]
+        mistakes: ["No limit on tool calls"]
+        key_points:
+          - [recursion limit, step limit, max steps]
+          - [budget, token, time]
+          - [repeat, loop detection]
+          - [human, fallback]
+      - difficulty: advanced
+        prompt: "How would you make a long-running LangGraph agent durable?"
+        concise: "Use a persistent checkpointer (Postgres), make nodes idempotent, store external side effects with idempotency keys, run on workers that can resume by thread id, and expose status over streaming events."
+        explanation: "Durability means a crash mid-run resumes rather than repeating side effects."
+        example: "PostgresSaver checkpointer; thread_id per conversation"
+        follow_ups: ["What if a node had already called an external API?", "How do you migrate state schemas?"]
+        mistakes: ["In-memory checkpointer in production"]
+        key_points:
+          - [checkpointer, postgres, persist]
+          - [idempot]
+          - [resume, thread]
+          - [stream]
+  agentic-ai:
+    title: "Agentic AI"
+    questions:
+      - difficulty: beginner
+        prompt: "Workflow or agent - how do you decide?"
+        concise: "Use a workflow when the steps are known in advance; use an agent only when the path depends on intermediate results and the model must choose tools. Start with the simplest thing that passes your evals."
+        explanation: "Agents cost more, are harder to test and need guardrails; many 'agent' use cases are workflows with one model call."
+        example: "Invoice extraction -> workflow. Debugging a failing CI run -> agent with read-only tools."
+        follow_ups: ["What evidence would make you switch?", "How do you evaluate an agent?"]
+        mistakes: ["Choosing an agent because it sounds advanced"]
+        key_points:
+          - [known, fixed, predetermined]
+          - [choose tools, tool choice, decide]
+          - [simple, simplest]
+          - [eval, test]
+          - [cost, latency]
+      - difficulty: intermediate
+        prompt: "What guardrails would you put around an agent that can call tools?"
+        concise: "Allowlisted tools with validated arguments, read-only by default, human approval for side effects, step/token/time budgets, permission-aware data access, output validation, and full tracing with audit logs."
+        explanation: "Assume the model will sometimes be wrong or manipulated; design so mistakes are contained."
+        example: "send_email returns a pending action; a person approves the exact recipient and body."
+        follow_ups: ["How do you test guardrails?", "What is the confused-deputy problem?"]
+        mistakes: ["Letting the model call arbitrary HTTP endpoints"]
+        key_points:
+          - [allowlist, validated argument]
+          - [read-only]
+          - [approval, human]
+          - [budget, limit]
+          - [trace, audit, log]
+      - difficulty: intermediate
+        prompt: "How do you evaluate an agent?"
+        concise: "Build a dataset of tasks with checkable outcomes, run the agent with traces, score task success, tool-call correctness, cost and latency, and track regressions per release; use LLM judges only where calibrated."
+        explanation: "Evaluate trajectories (which tools, in what order) as well as final answers."
+        example: "45 eval cases; ship only if pass rate doesn't drop and cost per task stays under budget."
+        follow_ups: ["How do you get eval data?", "How do you avoid overfitting to the eval set?"]
+        mistakes: ["Only eyeballing demo runs"]
+        key_points:
+          - [dataset, eval set, test cases]
+          - [task success, pass rate]
+          - [tool, trajectory]
+          - [cost, latency]
+          - [regression]
+      - difficulty: advanced
+        prompt: "When are multi-agent systems worth it?"
+        concise: "When a task splits into independent subtasks that benefit from parallel, specialised exploration and a single agent measurably falls short. Otherwise they add cost, latency and coordination failures."
+        explanation: "Give each sub-agent a budget and a clear contract; merge results deterministically where possible."
+        example: "Research coordinator spawns 3 searchers with 5k-token budgets each."
+        follow_ups: ["How do agents share state?", "How do you debug them?"]
+        mistakes: ["Starting with many agents before one works"]
+        key_points:
+          - [parallel, independent]
+          - [specialis, specializ]
+          - [cost, overhead, coordination]
+          - [budget]
+          - [single agent]
+  llm-engineering:
+    title: "LLM Engineering"
+    questions:
+      - difficulty: beginner
+        prompt: "What are tokens and why do they matter for cost and latency?"
+        concise: "Models read and write tokens (sub-word pieces). Price, context limits and latency scale with input and output tokens, and output tokens are usually slower and pricier than input tokens."
+        explanation: "Trimming context, caching prompts and choosing smaller models cut cost the most."
+        example: "Roughly 4 characters per token in English; 2,000 input + 300 output tokens per request."
+        follow_ups: ["How does prompt caching help?", "Why do non-English languages use more tokens?"]
+        mistakes: ["Ignoring output tokens in cost estimates"]
+        key_points:
+          - [sub-word, subword, piece]
+          - [cost, price]
+          - [context window, context limit]
+          - [output token]
+          - [latency]
+      - difficulty: intermediate
+        prompt: "How do you choose between a small and a large model for a feature?"
+        concise: "Define quality with an eval set, try the smallest model that passes, compare cost and latency, and route only hard cases to larger models. Consider privacy and hosting constraints too."
+        explanation: "Many extraction and classification tasks don't need frontier models."
+        example: "Small model passes 94% of 200 cases at 1/10 the cost; route low-confidence cases to a large model."
+        follow_ups: ["How do you route?", "When would you self-host?"]
+        mistakes: ["Defaulting to the largest model"]
+        key_points:
+          - [eval]
+          - [smallest, small model]
+          - [cost]
+          - [latency]
+          - [route, routing]
+      - difficulty: intermediate
+        prompt: "What do quantization, LoRA and QLoRA do?"
+        concise: "Quantization stores weights in fewer bits to cut memory and speed up inference; LoRA trains small low-rank adapters instead of all weights; QLoRA applies LoRA on a 4-bit quantised base model to fine-tune on modest GPUs."
+        explanation: "Always re-evaluate quality after quantising or fine-tuning."
+        example: "A 7B model needs ~14 GB at fp16 and ~4 GB at 4-bit."
+        follow_ups: ["What does rank mean in LoRA?", "When does quantization hurt?"]
+        mistakes: ["Using fine-tuning to add facts"]
+        key_points:
+          - [bits, precision, 4-bit, 8-bit]
+          - [memory]
+          - [adapter, low-rank]
+          - [qlora]
+          - [quality, evaluat]
+      - difficulty: advanced
+        prompt: "How would you serve an open-weights model in production?"
+        concise: "Use an inference server with continuous batching and paged attention (vLLM, TGI), quantise if needed, autoscale on queue depth, set token limits and timeouts, cache prompts, and monitor latency, throughput and quality."
+        explanation: "GPU utilisation is the cost driver; batching matters more than raw single-request speed."
+        example: "vLLM on 1x L4 serving an 8B model with 4-bit AWQ weights"
+        follow_ups: ["What is continuous batching?", "How do you scale to zero?"]
+        mistakes: ["Serving with a plain Python loop"]
+        key_points:
+          - [vllm, tgi, inference server]
+          - [batch]
+          - [quantiz]
+          - [autoscal, gpu]
+          - [monitor, latency, throughput]
+  behavioral:
+    title: "Behavioral"
+    questions:
+      - difficulty: beginner
+        prompt: "Tell me about a time you made a mistake in production."
+        concise: "Use STAR - the situation, your task, the actions you took (including how you detected, mitigated and communicated), and the result with what you changed afterwards."
+        explanation: "Interviewers look for ownership, calm incident handling and learning, not perfection."
+        example: "A migration locked a table for 4 minutes; I rolled back, posted updates, and added a lock-timeout check to CI."
+        follow_ups: ["What would you do differently?", "How did you communicate with stakeholders?"]
+        mistakes: ["Blaming others", "No concrete outcome"]
+        key_points:
+          - [situation]
+          - [action, i did, i rolled back, i fixed]
+          - [result, outcome, impact]
+          - [learn, changed, prevent, postmortem]
+      - difficulty: intermediate
+        prompt: "Describe a time you disagreed with a technical decision."
+        concise: "Explain the context, how you raised concerns with evidence, how you listened, what was decided, and how you committed to the outcome."
+        explanation: "Strong answers show data, respect and the ability to disagree and commit."
+        example: "I benchmarked two queue options, shared results in an RFC, the team chose SQS for ops simplicity, and I implemented it."
+        follow_ups: ["What if you were overruled and turned out right?", "How do you handle a senior person disagreeing?"]
+        mistakes: ["Framing the other person as wrong"]
+        key_points:
+          - [evidence, data, benchmark]
+          - [listen, perspective]
+          - [commit, decision]
+          - [outcome, result]
+      - difficulty: intermediate
+        prompt: "How do you prioritise when everything is urgent?"
+        concise: "Clarify impact and deadlines with stakeholders, rank by user and business impact versus effort, communicate trade-offs explicitly, and protect time for the top priority."
+        explanation: "Show a framework and an example of saying no or \"not now\" constructively."
+        example: "I mapped requests on impact/effort, agreed the top two with my manager, and moved the rest to next sprint with dates."
+        follow_ups: ["Tell me about a time you said no."]
+        mistakes: ["Trying to do everything"]
+        key_points:
+          - [impact]
+          - [stakeholder, manager]
+          - [trade-off, tradeoff]
+          - [communicat]
+      - difficulty: advanced
+        prompt: "Tell me about a project where you introduced AI into an existing product."
+        concise: "Cover the problem and metric, why AI was the right tool (or where you chose rules instead), how you evaluated quality, safety and cost, how you rolled it out, and measured results."
+        explanation: "Interviewers want judgement - evaluation, guardrails, cost and user impact - more than model names."
+        example: "Ticket triage: baseline rules 71% accuracy; model + rules 89% on 500 labelled tickets; human review for low confidence."
+        follow_ups: ["What went wrong?", "How did you handle hallucinations?"]
+        mistakes: ["No evaluation or metrics"]
+        key_points:
+          - [problem, metric, goal]
+          - [evaluat, accuracy, eval]
+          - [guardrail, safety, human review]
+          - [cost]
+          - [result, impact, measured]

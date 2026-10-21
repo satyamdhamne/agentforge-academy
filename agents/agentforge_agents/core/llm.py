@@ -142,6 +142,28 @@ class MockProvider:
         )
 
 
+class SimulatedProvider(MockProvider):
+    """MockProvider that answers *any* task: registered responders first, then the rule-based prompt simulator.
+
+    Used by the labs and the Agent Builder, where prompts are written by learners and no fixed responder exists.
+    """
+
+    def __init__(self, responders: dict[str, MockResponder] | None = None, model: str = "simulator-1"):
+        super().__init__(responders, model=model)
+
+    def complete(self, request: CompletionRequest) -> Completion:
+        if request.task in self._responders:
+            return super().complete(request)
+        from .simulator import simulate
+
+        started = time.perf_counter()
+        result = simulate(request.messages, request.response_schema)
+        content = json.dumps(result) if isinstance(result, (dict, list)) else str(result)
+        prompt_text = "\n".join(m.content for m in request.messages)
+        return Completion(content=content, tool_calls=[], usage=Usage(estimate_tokens(prompt_text), estimate_tokens(content)),
+                          model=self.model, provider=self.name, latency_ms=int((time.perf_counter() - started) * 1000))
+
+
 # --------------------------------------------------------------------------------------------
 # OpenAI-compatible provider
 # --------------------------------------------------------------------------------------------

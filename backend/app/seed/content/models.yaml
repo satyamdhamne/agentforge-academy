@@ -1,0 +1,111 @@
+# LLM & SLM Lab reference data. Figures are approximate and change quickly - always check the model card.
+# params_b: parameters in billions. context_k: context window in thousands of tokens.
+version_note: Reviewed October 2026. Model versions and prices change often; treat this as a starting point, not a quote.
+models:
+  - key: phi-3-mini
+    name: Phi-3 mini
+    family: Microsoft Phi
+    params_b: 3.8
+    context_k: 128
+    license: MIT
+    open_weights: true
+    class: slm
+    strengths: [On-device and CPU inference, Classification and extraction, Low cost fine-tuning]
+    weaknesses: [Limited world knowledge, Weaker long multi-step reasoning]
+  - key: llama-3.1-8b
+    name: Llama 3.1 8B Instruct
+    family: Meta Llama
+    params_b: 8
+    context_k: 128
+    license: Llama Community License
+    open_weights: true
+    class: slm
+    strengths: [Strong general small model, Large ecosystem of fine-tunes, Runs on a single consumer GPU]
+    weaknesses: [License has usage conditions, Needs a GPU for interactive latency]
+  - key: mistral-7b
+    name: Mistral 7B Instruct
+    family: Mistral
+    params_b: 7.2
+    context_k: 32
+    license: Apache-2.0
+    open_weights: true
+    class: slm
+    strengths: [Permissive license, Efficient inference, Good base for LoRA]
+    weaknesses: [Shorter context than newer models]
+  - key: qwen2.5-7b
+    name: Qwen2.5 7B Instruct
+    family: Alibaba Qwen
+    params_b: 7.6
+    context_k: 128
+    license: Apache-2.0
+    open_weights: true
+    class: slm
+    strengths: [Strong coding and math for its size, Multilingual, Structured output]
+    weaknesses: [Long context needs extra configuration in some runtimes]
+  - key: gemma-2-9b
+    name: Gemma 2 9B
+    family: Google Gemma
+    params_b: 9
+    context_k: 8
+    license: Gemma Terms of Use
+    open_weights: true
+    class: slm
+    strengths: [High quality per parameter, Good instruction following]
+    weaknesses: [Short context window, Custom license terms]
+  - key: llama-3.1-70b
+    name: Llama 3.1 70B Instruct
+    family: Meta Llama
+    params_b: 70
+    context_k: 128
+    license: Llama Community License
+    open_weights: true
+    class: llm
+    strengths: [Near frontier quality for many tasks, Self-hostable for data residency]
+    weaknesses: [Needs multiple GPUs or heavy quantisation, High serving cost]
+  - key: api-small
+    name: Small hosted model (mini / haiku class)
+    family: Hosted API
+    params_b: null
+    context_k: 200
+    license: Commercial API
+    open_weights: false
+    class: api
+    strengths: [Low latency and price, No infrastructure, Reliable structured output]
+    weaknesses: [Data leaves your network, Per-token cost at scale, Vendor rate limits]
+  - key: api-frontier
+    name: Frontier hosted model (large reasoning class)
+    family: Hosted API
+    params_b: null
+    context_k: 200
+    license: Commercial API
+    open_weights: false
+    class: api
+    strengths: [Best reasoning and coding quality, Tool use and long context]
+    weaknesses: [Highest cost and latency, Data governance review needed]
+
+techniques:
+  - key: quantization
+    name: Quantization
+    summary: Store weights in fewer bits (8, 4 or even 3) to cut memory and speed up inference, trading a little accuracy.
+    when: You need a model to fit on smaller GPUs or CPUs. 4-bit (GGUF Q4_K_M, AWQ, GPTQ) is the common sweet spot.
+    watch_out: Measure quality on your own eval set - math and code degrade first.
+  - key: lora
+    name: LoRA
+    summary: Freeze the base model and train small low-rank adapter matrices. Typically well under 1% of parameters are trained.
+    when: You need consistent format, tone or domain vocabulary that prompting can't reliably give you.
+    watch_out: Fine-tuning teaches behaviour, not facts - use RAG for knowledge that changes.
+  - key: qlora
+    name: QLoRA
+    summary: LoRA on top of a 4-bit quantised base model, so a 7-8B model can be fine-tuned on a single 24 GB GPU.
+    when: Limited GPU memory and budget.
+    watch_out: Slower training than plain LoRA; merge adapters carefully before serving.
+  - key: distillation
+    name: Distillation
+    summary: Generate outputs from a large teacher model and train a small student to imitate them.
+    when: A narrow task runs at high volume and a large model is too slow or expensive.
+    watch_out: Check the teacher's terms of use; the student inherits the teacher's mistakes.
+  - key: routing
+    name: Model routing
+    summary: Send easy requests to a small model and hard ones to a large model, using rules or a classifier.
+    when: Traffic mixes simple and complex requests.
+    watch_out: Monitor quality per route; misrouted hard requests fail silently.

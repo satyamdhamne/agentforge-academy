@@ -100,6 +100,12 @@ class Api:
     def patch(self, path, json=None, headers=None):
         return self.c.patch(f"/api/v1{path}", json=json, headers=self._h(headers))
 
+    def put(self, path, json=None, headers=None):
+        return self.c.put(f"/api/v1{path}", json=json, headers=self._h(headers))
+
+    def delete(self, path, headers=None):
+        return self.c.delete(f"/api/v1{path}", headers=self._h(headers))
+
     def register(self, name="Test Learner") -> dict:
         email = f"user-{uuid.uuid4().hex[:10]}@example.com"
         r = self.post("/auth/register", {"email": email, "password": PASSWORD, "display_name": name})

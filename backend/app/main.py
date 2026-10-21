@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.config import get_settings
 from .core.errors import install_error_handlers
 from .core.middleware import CSRFMiddleware, RequestContextMiddleware, configure_logging
-from .modules import admin, agents, auth, challenges, codelab, learning, misc
+from .modules import admin, agents, auth, builder, career, challenges, codelab, evals, learning, misc, prompts, rag
 
 
 def create_app() -> FastAPI:
@@ -31,7 +31,7 @@ def create_app() -> FastAPI:
     install_error_handlers(app)
 
     for r in (auth.router, auth.me_router, learning.router, challenges.router, codelab.router, agents.router,
-              admin.router, admin.public_router, misc.router):
+              admin.router, admin.public_router, misc.router, prompts.router, rag.router, evals.router, builder.router, career.router):
         app.include_router(r, prefix=s.api_prefix)
     app.include_router(misc.health_router)
     return app

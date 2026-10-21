@@ -1,6 +1,8 @@
 from .agents import Agent, AgentFile, AgentRun, AgentVersion
 from .base import Base
+from .career import InterviewAnswer, InterviewSession, MentorMessage, SkillAssessment, WorkflowRun
 from .identity import AuthToken, CredentialRef, Organization, Profile, Role, Session, User, UserRole
+from .labs import PromptTestCase, RagChunk, RagDataset, RagDocument, RagIndex, RagQuestion
 from .learning import (
     Assessment,
     ChallengeAttempt,
@@ -41,5 +43,6 @@ __all__ = [
     "EvaluationCase", "Exercise", "HintReveal", "LearningTrack", "Lesson", "LessonVersion", "Module", "Organization",
     "Portfolio", "PortfolioEntry", "Profile", "Progress", "Project", "PromptTemplate", "PromptVersion", "Question",
     "Role", "Session", "Subscription", "UsageEvent", "User", "UserAchievement", "UserRole", "Workflow",
-    "WorkflowEdge", "WorkflowNode",
+    "WorkflowEdge", "WorkflowNode", "WorkflowRun", "InterviewAnswer", "InterviewSession", "MentorMessage", "SkillAssessment",
+    "PromptTestCase", "RagChunk", "RagDataset", "RagDocument", "RagIndex", "RagQuestion",
 ]

@@ -36,6 +36,13 @@ def _agent_runs(db: Session, user: User) -> int:
                                                                      AgentRun.status != "failed")) or 0
 
 
+def _projects_verified(db: Session, user: User) -> int:
+    from ..models import Portfolio, PortfolioEntry
+
+    return db.scalar(select(func.count()).select_from(PortfolioEntry).join(Portfolio, Portfolio.id == PortfolioEntry.portfolio_id)
+                     .where(Portfolio.user_id == user.id, PortfolioEntry.review_status == "verified")) or 0
+
+
 def activity_days(db: Session, user: User) -> list[date]:
     """Distinct UTC days with a completed lesson or a challenge attempt."""
     days: set[date] = set()
@@ -72,7 +79,8 @@ def evaluate(db: Session, user: User) -> list[Achievement]:
     """Grant any newly satisfied achievements. Returns the newly granted ones."""
     owned = set(db.scalars(select(UserAchievement.achievement_id).where(UserAchievement.user_id == user.id)).all())
     stats = {"lessons_completed": _lessons_completed(db, user), "challenges_passed": _challenges_passed(db, user),
-             "agent_runs": _agent_runs(db, user), "streak_days": current_streak(db, user)}
+             "agent_runs": _agent_runs(db, user), "streak_days": current_streak(db, user),
+             "projects_verified": _projects_verified(db, user)}
     new = []
     for ach in db.scalars(select(Achievement)).all():
         if ach.id in owned:

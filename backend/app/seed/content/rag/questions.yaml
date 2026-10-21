@@ -1,0 +1,42 @@
+# Labelled evaluation questions for the Northwind demo corpus.
+# relevant_sources = file names (without .md) that contain the answer. user_groups = who is asking.
+northwind-handbook:
+  - question: How many API requests per minute can a single key send by default?
+    relevant_sources: [api-rate-limits]
+    answer_contains: ["100"]
+  - question: What HTTP status code is returned when the rate limit is exceeded?
+    relevant_sources: [api-rate-limits]
+    answer_contains: ["429"]
+  - question: How should clients retry failed requests?
+    relevant_sources: [api-rate-limits]
+    answer_contains: ["backoff"]
+  - question: How much does the Business plan cost per month?
+    relevant_sources: [pricing-and-plans]
+    answer_contains: ["199"]
+  - question: Within how many days of the first payment can a new subscription be refunded?
+    relevant_sources: [pricing-and-plans]
+    answer_contains: ["14"]
+  - question: How long are application logs retained?
+    relevant_sources: [data-retention-policy]
+    answer_contains: ["30 days"]
+  - question: How many days per week may employees work remotely?
+    relevant_sources: [remote-work-and-leave-policy]
+    answer_contains: ["three"]
+  - question: Where must API keys and database passwords be stored?
+    relevant_sources: [security-policy]
+    answer_contains: ["secrets manager"]
+  - question: How quickly must the primary on-call engineer acknowledge a SEV1 page?
+    relevant_sources: [on-call-policy]
+    answer_contains: ["5 minutes"]
+    user_groups: [everyone, engineering]
+  - question: Who becomes Incident Commander for a SEV1 incident?
+    relevant_sources: [incident-response-runbook]
+    answer_contains: ["on-call"]
+    user_groups: [everyone, engineering]
+  - question: What is the E5 salary band?
+    relevant_sources: []
+    answer_contains: []
+    note: Asked by a regular employee. The compensation document is restricted to HR, so the correct behaviour is "I don't know".
+  - question: When do partner support hours start?
+    relevant_sources: [vendor-integration-notes]
+    answer_contains: ["09:00"]

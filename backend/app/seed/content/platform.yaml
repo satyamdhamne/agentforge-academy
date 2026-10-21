@@ -5,18 +5,33 @@ entitlements:
   free:
     sandbox_runs_per_day: {limit: 100}
     agent_runs_per_day: {limit: 25}
+    prompt_runs_per_day: {limit: 200}
+    rag_queries_per_day: {limit: 200}
+    workflow_runs_per_day: {limit: 50}
+    mentor_messages_per_day: {limit: 30}
+    interview_sessions_per_day: {limit: 5}
     real_model_agent_runs: {enabled: false}
     pro_content: {enabled: false}
     team_dashboards: {enabled: false}
   pro:
     sandbox_runs_per_day: {limit: 1000}
     agent_runs_per_day: {limit: 200}
+    prompt_runs_per_day: {limit: 1000}
+    rag_queries_per_day: {limit: 1000}
+    workflow_runs_per_day: {limit: 300}
+    mentor_messages_per_day: {limit: 200}
+    interview_sessions_per_day: {limit: 30}
     real_model_agent_runs: {enabled: true}
     pro_content: {enabled: true}
     team_dashboards: {enabled: false}
   team:
     sandbox_runs_per_day: {limit: null}
     agent_runs_per_day: {limit: 500}
+    prompt_runs_per_day: {limit: 3000}
+    rag_queries_per_day: {limit: 3000}
+    workflow_runs_per_day: {limit: 1000}
+    mentor_messages_per_day: {limit: 500}
+    interview_sessions_per_day: {limit: 100}
     real_model_agent_runs: {enabled: true}
     pro_content: {enabled: true}
     team_dashboards: {enabled: true}
@@ -31,6 +46,7 @@ achievements:
   - {slug: first-agent-run, name: Agent Operator, icon: bot, description: Run a reference agent and inspect its trace., criteria: {type: agent_runs, min: 1}}
   - {slug: streak-3, name: Three-Day Streak, icon: calendar-check, description: Learn on three consecutive days., criteria: {type: streak_days, min: 3}}
   - {slug: streak-7, name: Week Warrior, icon: calendar-heart, description: Learn on seven consecutive days., criteria: {type: streak_days, min: 7}}
+  - {slug: verified-project, name: Shipped It, icon: badge-check, description: Have a portfolio project verified by a reviewer., criteria: {type: projects_verified, min: 1}}
   - {slug: rag-track-complete, name: Retrieval Engineer, icon: database-zap, description: Complete every published lesson in RAG Engineering., criteria: {type: track_completed, track: rag-engineering}}
   - {slug: agentic-track-complete, name: Agent Architect, icon: workflow, description: Complete every published lesson in Agentic AI., criteria: {type: track_completed, track: agentic-ai}}
 
